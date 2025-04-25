@@ -4,103 +4,63 @@ import {
   Get,
   Post,
   Body,
-  Patch, // 或 Put
+  Patch,
   Param,
   Delete,
-  UsePipes, // 用于管道
-  ValidationPipe, // 用于数据验证
-  NotFoundException,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-// 导入认证守卫等 (未来步骤)
-// import { AuthGuard } from '@nestjs/passport';
-// import { UseGuards } from '@nestjs/common';
 
-@Controller('users') // 设置基础路由为 /users
-// @UseGuards(AuthGuard('jwt')) // (可选) 对整个控制器启用 JWT 认证保护
+// 在 main.ts 中启用全局管道，或者在这里为特定控制器/路由启用
+// @UsePipes(new ValidationPipe(...))
+
+@Controller('users') // 定义基础路由为 /users
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // --- CREATE ---
+  // --- 创建用户 ---
   // POST /users
   @Post()
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) // 应用验证管道
-  async create(@Body() createUserDto: CreateUserDto) {
-    // 注意：实际项目中，用户注册可能放在 AuthController 更合适
+  // @UsePipes(new ValidationPipe({...})) // 如果没在全局启用，可以在这里启用
+  create(@Body() createUserDto: CreateUserDto) {
+    // @Body() 获取请求体并绑定到 DTO
     return this.usersService.create(createUserDto);
   }
 
-  // --- READ ALL ---
+  // --- 获取所有用户 ---
   // GET /users
   @Get()
-  async findAll() {
+  findAll() {
     return this.usersService.findAll();
   }
 
-  // --- READ ONE ---
-  // GET /users/:id  (例如 /users/60b9d0f3f8e4a8b3d4e1f8b1)
+  // --- 获取单个用户 ---
+  // GET /users/:id (例如 /users/662695e1...)
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    // 注意：实际项目中应对 ID 格式进行验证 (例如使用 ValidationPipe 或自定义 Pipe)
-    try {
-      const user = await this.usersService.findOne(id);
-      return user;
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw new NotFoundException(error.message); // 保持 404 状态码
-      }
-      throw error; // 其他错误则抛出
-    }
+  // 可以添加 Pipe 来验证 ID 格式，例如 Mongoose ObjectId 格式
+  // findOne(@Param('id', YourMongoIdValidationPipe) id: string) {
+  findOne(@Param('id') id: string) {
+    // @Param('id') 获取 URL 中的 id 参数
+    return this.usersService.findOne(id);
   }
 
-  // --- UPDATE ---
+  // --- 更新用户 ---
   // PATCH /users/:id
   @Patch(':id')
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
-  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    try {
-      const updatedUser = await this.usersService.update(id, updateUserDto);
-      return updatedUser;
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw new NotFoundException(error.message); // 保持 404 状态码
-      }
-      throw error; // 其他错误则抛出
-    }
+  // @UsePipes(new ValidationPipe({...}))
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(id, updateUserDto);
   }
 
-  // --- DELETE ---
+  // --- 删除用户 ---
   // DELETE /users/:id
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT) // 通常 DELETE 成功返回 204 No Content
-  async remove(@Param('id') id: string) {
-    try {
-      await this.usersService.remove(id);
-      // 成功时不返回内容
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw new NotFoundException(error.message); // 保持 404 状态码
-      }
-      throw error; // 其他错误则抛出
-    }
+  @HttpCode(HttpStatus.NO_CONTENT) // 设置成功响应状态码为 204 No Content
+  remove(@Param('id') id: string) {
+    // Service 中已处理 Not Found 异常
+    return this.usersService.remove(id); // 注意 remove 方法现在返回 void
   }
 }
-
-// **重要提示**: 为了让 DTO 的验证生效（例如使用 class-validator 装饰器），
-// 你需要在 `src/main.ts` 中全局启用 ValidationPipe:
-// import { ValidationPipe } from '@nestjs/common';
-// ...
-// async function bootstrap() {
-//   const app = await NestFactory.create(AppModule);
-//   app.useGlobalPipes(new ValidationPipe({
-//     whitelist: true, // 自动移除 DTO 中未定义的属性
-//     forbidNonWhitelisted: true, // 如果有多余属性则报错
-//     transform: true, // 自动转换传入参数类型 (例如 string -> number)
-//   }));
-//   await app.listen(3000);
-// }
-// bootstrap();

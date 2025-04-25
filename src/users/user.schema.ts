@@ -40,16 +40,15 @@ export class User {
   @Prop({ type: Object })
   staffInfo: {
     // 教职工特有信息
-    officeLoaction: string; // 办公地点
-    title: string[]; // 职称
-    managedClassIds: string[]; // 管理的班级ID（辅导员）
+    officeLocation?: string; // 办公地点
+    title?: string[]; // 职称
+    managedClassIds?: string[]; // 管理的班级ID（辅导员）
   };
   @Prop({ type: Object })
-  concactInfo: {
-    // 联系方式
-    phone: string; // 联系电话
-    email: string; // 电子邮箱
-  };
+  @Prop({ unique: true })
+  email: string;
+  @Prop({ required: true, unique: true })
+  phone: string; // 手机号
   @Prop({ default: 'active' })
   status: string; // 用户状态，正常 or 禁用
 }
