@@ -9,10 +9,13 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
+  UseGuards,
+  Request,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 // 在 main.ts 中启用全局管道，或者在这里为特定控制器/路由启用
 // @UsePipes(new ValidationPipe(...))
@@ -20,6 +23,19 @@ import { UpdateUserDto } from './dto/update-user.dto';
 @Controller('users') // 定义基础路由为 /users
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  // --- 获取当前登录用户的信息 ---
+  // GET /users/me
+  @UseGuards(JwtAuthGuard) // 使用 JWT 守卫保护此路由
+  @Get('me')
+  getProfile(@Request() req) {
+    // JwtAuthGuard 会将解码后的用户信息附加到 req.user
+    // JwtStrategy 中的 validate 方法决定了 req.user 的内容
+    // 根据你的 JwtStrategy，req.user 包含 { userId, username, roles }
+    const userId = req.user.userId;
+    // 调用 findOne 获取完整的用户信息（不含密码）
+    return this.usersService.findOne(userId);
+  }
 
   // --- 创建用户 ---
   // POST /users

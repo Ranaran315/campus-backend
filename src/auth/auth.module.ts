@@ -5,6 +5,7 @@ import { UsersModule } from '../users/users.module'; // 导入 UsersModule
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './strategies/jwt.strategy'; // 稍后创建
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
   imports: [

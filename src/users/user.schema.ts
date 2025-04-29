@@ -17,6 +17,10 @@ export class User {
   realname: string; // 真实姓名
   @Prop({ required: true, default: 'male' })
   gender: string; // 性别
+  @Prop()
+  birthday: Date; // 生日
+  @Prop()
+  description: string; // 个人简介
   @Prop({ default: 'student' })
   userType: string; // 用户类型，学生 or 教职工
   @Prop({ unique: true, sparse: true }) // unique but can be null
@@ -30,6 +34,12 @@ export class User {
     // 学院信息
     departmentId: string; // 学院ID
     departmentName: string; // 学院名称
+  };
+  @Prop({ type: Object })
+  majorInfo: {
+    // 专业信息
+    majorId: string; // 专业ID
+    majorName: string; // 专业名称
   };
   @Prop({ type: Object })
   classInfo: {
