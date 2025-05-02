@@ -1,0 +1,67 @@
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards, Request } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { FriendsService } from './friends.service';
+
+// friends.controller.ts
+@Controller('friends')
+@UseGuards(JwtAuthGuard)
+export class FriendsController {
+  constructor(private friendsService: FriendsService) {}
+
+  // 获取我的好友列表
+  @Get()
+  getFriends(@Request() req) {
+    const userId = req.user.userId;
+    return this.friendsService.getFriends(userId);
+  }
+
+  // 发送好友请求
+  @Post('requests')
+  sendFriendRequest(@Request() req, @Body() dto: { receiverId: string; message?: string }) {
+    const senderId = req.user.userId;
+    return this.friendsService.sendFriendRequest(senderId, dto.receiverId, dto.message);
+  }
+
+  // 获取我收到的好友请求
+  @Get('requests/received')
+  getReceivedFriendRequests(@Request() req) {
+    const userId = req.user.userId;
+    return this.friendsService.getReceivedFriendRequests(userId);
+  }
+
+  // 获取我发送的好友请求
+  @Get('requests/sent')
+  getSentFriendRequests(@Request() req) {
+    const userId = req.user.userId;
+    return this.friendsService.getSentFriendRequests(userId);
+  }
+
+  // 处理好友请求
+  @Patch('requests/:requestId')
+  handleFriendRequest(
+    @Request() req,
+    @Param('requestId') requestId: string,
+    @Body() dto: { action: 'accept' | 'reject' | 'ignore' },
+  ) {
+    const userId = req.user.userId;
+    return this.friendsService.handleFriendRequest(userId, requestId, dto.action);
+  }
+
+  // 设置好友备注
+  @Patch(':friendId/remark')
+  setFriendRemark(
+    @Request() req,
+    @Param('friendId') friendId: string,
+    @Body() dto: { remark: string },
+  ) {
+    const userId = req.user.userId;
+    return this.friendsService.setFriendRemark(userId, friendId, dto.remark);
+  }
+
+  // 删除好友
+  @Delete(':friendId')
+  removeFriend(@Request() req, @Param('friendId') friendId: string) {
+    const userId = req.user.userId;
+    return this.friendsService.removeFriend(userId, friendId);
+  }
+}
