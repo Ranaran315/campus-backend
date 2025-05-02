@@ -10,7 +10,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './user.schema'; // 导入 Schema 和 文档类型
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { ChangePasswordDto, UpdateProfileDto, UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt'; // 导入 bcrypt 用于密码哈希
 
 @Injectable()
@@ -137,20 +137,12 @@ export class UsersService {
     return this.userModel.findOne({ username }).exec();
   }
 
-  // --- 更新用户信息 (UPDATE) ---
+  // --- 更新用户信息 （管理员） ---
   async update(
     id: string,
     updateUserDto: UpdateUserDto,
   ): Promise<Omit<User, 'password'>> {
-    // 如果 DTO 中包含密码，则对其进行哈希处理
-    if (updateUserDto.password) {
-      const saltRounds = 10;
-      updateUserDto.password = await bcrypt.hash(
-        updateUserDto.password,
-        saltRounds,
-      );
-    }
-
+    
     // 查找并更新用户，{ new: true } 会返回更新后的文档
     const updatedUser = await this.userModel
       .findByIdAndUpdate(
@@ -165,6 +157,76 @@ export class UsersService {
       throw new NotFoundException(`ID 为 '${id}' 的用户不存在。`);
     }
     return updatedUser;
+  }
+
+  // --- 更新用户信息 （个人） ---
+  async updateProfile(
+    userId: string,
+    updateProfileDto: UpdateProfileDto,
+  ): Promise<Omit<User, 'password'>> {
+    // 检查 email 和 phone 是否与其他用户冲突 (如果它们被更改)
+    if (updateProfileDto.email || updateProfileDto.phone) {
+      const queryConditions = [] as any[];
+      if (updateProfileDto.email) {
+        queryConditions.push({ email: updateProfileDto.email, _id: { $ne: userId } });
+      }
+      if (updateProfileDto.phone) {
+        queryConditions.push({ phone: updateProfileDto.phone, _id: { $ne: userId } });
+      }
+
+      if (queryConditions.length > 0) {
+         const existingUser = await this.userModel.findOne({ $or: queryConditions }).exec();
+         if (existingUser) {
+            let conflictField = '';
+            if (existingUser.email === updateProfileDto.email) conflictField = '邮箱';
+            else if (existingUser.phone === updateProfileDto.phone) conflictField = '手机号';
+            throw new ConflictException(`${conflictField} '${updateProfileDto[conflictField === '邮箱' ? 'email' : 'phone']}' 已被其他用户占用。`);
+         }
+      }
+    }
+
+    // 更新允许的字段
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        { $set: updateProfileDto }, // 使用 $set 确保只更新 DTO 中的字段
+        { new: true },
+      )
+      .select('-password')
+      .exec();
+
+    if (!updatedUser) {
+      throw new NotFoundException(`ID 为 '${userId}' 的用户不存在。`);
+    }
+    return updatedUser;
+  }
+
+  // --- 更新用户密码 ---
+  async changePassword(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<void> {
+    // 1. 查找用户 (需要包含密码以进行比较)
+    const user = await this.userModel.findById(userId).select('+password').exec();
+    if (!user) {
+      throw new NotFoundException(`ID 为 '${userId}' 的用户不存在。`);
+    }
+
+    // 2. 哈希新密码
+    const saltRounds = 10;
+    const hashedNewPassword = await bcrypt.hash(
+      changePasswordDto.newPassword,
+      saltRounds,
+    );
+
+    // 3. 更新密码
+    user.password = hashedNewPassword;
+    try {
+      await user.save();
+    } catch (error) {
+      console.error('修改密码时保存失败:', error);
+      throw new InternalServerErrorException('修改密码失败，请稍后重试。');
+    }
   }
 
   // --- 删除用户 (DELETE) ---

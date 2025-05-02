@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { ChangePasswordDto, UpdateProfileDto, UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 // 在 main.ts 中启用全局管道，或者在这里为特定控制器/路由启用
@@ -69,6 +69,24 @@ export class UsersController {
   // @UsePipes(new ValidationPipe({...}))
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
+  }
+
+  // --- 更新当前用户的个人信息 ---
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/profile')
+  updateProfile(@Request() req, @Body() updateProfileDto: UpdateProfileDto) {
+    const userId = req.user.userId;
+    return this.usersService.updateProfile(userId, updateProfileDto);
+  }
+
+  // --- 修改当前用户的密码 ---
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/password')
+  async changePassword(@Request() req, @Body() changePasswordDto: ChangePasswordDto) {
+     const userId = req.user.userId;
+     await this.usersService.changePassword(userId, changePasswordDto);
+     // 成功时不一定需要返回数据，可以返回成功消息或状态码
+     return { message: '密码修改成功。' };
   }
 
   // --- 删除用户 ---

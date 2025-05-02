@@ -9,6 +9,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -78,6 +79,7 @@ export class CreateUserDto {
 
   @IsString()
   @IsNotEmpty()
+  @Matches(/^1[3-9]\d{9}$/, { message: '请输入有效的中国大陆手机号码。' })
   @IsOptional() // 手机号在注册时是否必填？根据需求调整
   phone: string;
 
