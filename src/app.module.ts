@@ -8,8 +8,6 @@ import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { FriendsController } from './friends/friends.controller';
 import { FriendsModule } from './friends/friends.module';
-import { FriendsNoSpecService } from './friends--no-spec/friends--no-spec.service';
-import { FriendsNoSpecController } from './friends--no-spec/friends--no-spec.controller';
 
 @Module({
   imports: [
@@ -18,7 +16,7 @@ import { FriendsNoSpecController } from './friends--no-spec/friends--no-spec.con
     AuthModule,
     FriendsModule,
   ],
-  controllers: [AppController, AuthController, FriendsController, FriendsNoSpecController],
-  providers: [AppService, AuthService, FriendsNoSpecService],
+  controllers: [AppController, AuthController, FriendsController],
+  providers: [AppService, AuthService],
 })
 export class AppModule {}

@@ -205,4 +205,84 @@ export class FriendsService {
 
     return { success: true };
   }
+
+  // 获取用户好友的所有分类
+async getFriendCategories(userId: string): Promise<string[]> {
+  const relations = await this.friendRelationModel.find({ 
+    user: userId, 
+    status: 'accepted' 
+  });
+  
+  // 获取不重复的分类列表
+  const categories = [...new Set(relations.map(relation => relation.category))];
+  return categories;
+}
+
+// 按分类获取好友
+async getFriendsByCategory(userId: string): Promise<any> {
+  const relations = await this.friendRelationModel
+    .find({ user: userId, status: 'accepted' })
+    .populate('friend', 'username nickname avatar onlineStatus lastOnlineTime')
+    .lean();
+  
+  // 按分类分组
+  const categorized = {};
+  relations.forEach(relation => {
+    const category = relation.category || '我的好友';
+    if (!categorized[category]) {
+      categorized[category] = [];
+    }
+    categorized[category].push(relation);
+  });
+  
+  // 转换为数组形式
+  return Object.keys(categorized).map(category => ({
+    category,
+    friends: categorized[category]
+  }));
+}
+
+// 修改好友分类
+async updateFriendCategory(userId: string, friendId: string, category: string): Promise<any> {
+  const relation = await this.friendRelationModel.findOne({
+    user: userId,
+    friend: friendId,
+    status: 'accepted',
+  });
+
+  if (!relation) {
+    throw new NotFoundException('好友关系不存在');
+  }
+
+  relation.category = category;
+  return await relation.save();
+}
+
+// 创建新分类并移动好友
+async createCategoryAndMoveFriends(userId: string, category: string, friendIds: string[]): Promise<any> {
+  // 确认所有好友关系存在
+  const validations = await Promise.all(friendIds.map(friendId => 
+    this.friendRelationModel.findOne({
+      user: userId,
+      friend: friendId,
+      status: 'accepted',
+    })
+  ));
+  
+  const invalidFriends = validations.filter(relation => !relation);
+  if (invalidFriends.length > 0) {
+    throw new BadRequestException('部分好友关系不存在');
+  }
+  
+  // 批量更新好友分类
+  const updateOperations = friendIds.map(friendId => 
+    this.friendRelationModel.updateOne(
+      { user: userId, friend: friendId },
+      { category }
+    )
+  );
+  
+  await Promise.all(updateOperations);
+  return { success: true, category, count: friendIds.length };
+}
 }

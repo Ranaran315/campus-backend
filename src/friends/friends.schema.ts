@@ -19,8 +19,8 @@ export class FriendRelation {
   @Prop({ default: 'accepted' })
   status: string; // 好友关系状态: 'pending', 'accepted', 'blocked'
   
-//   @Prop({ default: 'default' })
-//   category: string; // 好友分组/分类
+  @Prop({ default: 'default' })
+  category: string; // 好友分组/分类
   
 //   @Prop({ default: false })
 //   isFavorite: boolean; // 是否为特别/星标好友
