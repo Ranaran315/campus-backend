@@ -16,7 +16,7 @@ import * as bcrypt from 'bcrypt'; // 导入 bcrypt 用于密码哈希
 @Injectable()
 export class UsersService {
   // 注入 User 的 Mongoose Model
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) { }
 
   // --- 创建用户 (CREATE) ---
   async create(createUserDto: CreateUserDto): Promise<Omit<User, 'password'>> {
@@ -142,7 +142,7 @@ export class UsersService {
     id: string,
     updateUserDto: UpdateUserDto,
   ): Promise<Omit<User, 'password'>> {
-    
+
     // 查找并更新用户，{ new: true } 会返回更新后的文档
     const updatedUser = await this.userModel
       .findByIdAndUpdate(
@@ -175,13 +175,13 @@ export class UsersService {
       }
 
       if (queryConditions.length > 0) {
-         const existingUser = await this.userModel.findOne({ $or: queryConditions }).exec();
-         if (existingUser) {
-            let conflictField = '';
-            if (existingUser.email === updateProfileDto.email) conflictField = '邮箱';
-            else if (existingUser.phone === updateProfileDto.phone) conflictField = '手机号';
-            throw new ConflictException(`${conflictField} '${updateProfileDto[conflictField === '邮箱' ? 'email' : 'phone']}' 已被其他用户占用。`);
-         }
+        const existingUser = await this.userModel.findOne({ $or: queryConditions }).exec();
+        if (existingUser) {
+          let conflictField = '';
+          if (existingUser.email === updateProfileDto.email) conflictField = '邮箱';
+          else if (existingUser.phone === updateProfileDto.phone) conflictField = '手机号';
+          throw new ConflictException(`${conflictField} '${updateProfileDto[conflictField === '邮箱' ? 'email' : 'phone']}' 已被其他用户占用。`);
+        }
       }
     }
 
@@ -240,5 +240,27 @@ export class UsersService {
     // 如果需要返回被删除的用户信息（通常不含密码）:
     // const { password, ...deletedUser } = result.toObject();
     // return deletedUser;
+  }
+
+  // --- 搜索用户 (根据用户名、昵称、真实姓名或邮箱) ---
+  async searchUsers(query: string): Promise<any[]> {
+    if (!query || query.trim().length === 0) {
+      return [];
+    }
+
+    // 构建搜索条件
+    const searchRegex = new RegExp(query, 'i');
+
+    return this.userModel.find({
+      $or: [
+        { username: searchRegex },
+        { nickname: searchRegex },
+        { realname: searchRegex },
+        { email: searchRegex }
+      ]
+    })
+      .select('username nickname avatar realname')
+      .limit(10)
+      .lean();
   }
 }

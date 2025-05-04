@@ -11,18 +11,21 @@ import {
   HttpStatus,
   UseGuards,
   Request,
+  Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ChangePasswordDto, UpdateProfileDto, UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Types } from 'mongoose';
 
 // 在 main.ts 中启用全局管道，或者在这里为特定控制器/路由启用
 // @UsePipes(new ValidationPipe(...))
 
 @Controller('users') // 定义基础路由为 /users
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   // --- 获取当前登录用户的信息 ---
   // GET /users/me
@@ -53,6 +56,12 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  // --- 搜索用户 ---
+  @Get('search')
+  async searchUsers(@Query('q') query: string) {
+    return this.usersService.searchUsers(query);
+  }
+
   // --- 获取单个用户 ---
   // GET /users/:id (例如 /users/662695e1...)
   @Get(':id')
@@ -60,6 +69,9 @@ export class UsersController {
   // findOne(@Param('id', YourMongoIdValidationPipe) id: string) {
   findOne(@Param('id') id: string) {
     // @Param('id') 获取 URL 中的 id 参数
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('无效的用户ID格式');
+    }
     return this.usersService.findOne(id);
   }
 
@@ -83,10 +95,10 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @Patch('me/password')
   async changePassword(@Request() req, @Body() changePasswordDto: ChangePasswordDto) {
-     const userId = req.user.userId;
-     await this.usersService.changePassword(userId, changePasswordDto);
-     // 成功时不一定需要返回数据，可以返回成功消息或状态码
-     return { message: '密码修改成功。' };
+    const userId = req.user.userId;
+    await this.usersService.changePassword(userId, changePasswordDto);
+    // 成功时不一定需要返回数据，可以返回成功消息或状态码
+    return { message: '密码修改成功。' };
   }
 
   // --- 删除用户 ---
