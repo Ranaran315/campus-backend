@@ -20,6 +20,15 @@ export interface FriendRequestNotificationData {
     };
     message: string;
     createdAt: Date;
+    status: 'pending' | 'accepted' | 'rejected' | 'ignored';
+}
+
+// --- 新增：定义好友请求状态更新的通知数据结构 ---
+export interface FriendRequestUpdateData {
+    requestId: string;
+    status: 'accepted' | 'rejected'; // 根据你的 FriendRequestStatus 类型调整
+    // 可以选择性地包含处理者信息，如果前端需要展示
+    // handler?: { _id: string; nickname: string; };
 }
 
 @Injectable()
@@ -143,6 +152,17 @@ export class NotificationsGateway implements OnGatewayInit, OnGatewayConnection,
         } catch (error) {
             this.logger.error(`向用户ID ${userId} 发送通知时出错: ${error.message}`);
             return false;
+        }
+    }
+
+    // 发送好友请求状态更新通知
+    sendFriendRequestUpdateNotification(targetUserId: string, data: FriendRequestUpdateData) {
+        const socketId = this.connectedUsers.get(targetUserId); // targetUserId 是最初发送请求的人
+        if (socketId) {
+            this.server.to(socketId).emit('friendRequestUpdate', data);
+            this.logger.log(`已发送好友请求状态更新通知给用户 ${targetUserId} (Socket: ${socketId})`);
+        } else {
+            this.logger.warn(`用户ID ${targetUserId} 不在线，未发送好友请求状态更新通知`);
         }
     }
 }
