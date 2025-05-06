@@ -204,38 +204,40 @@ export class FriendsService {
     return newRequest;
   }
 
-  // 获取收到的好友请求
   // 获取收到的好友请求 (可以考虑添加 status 参数进行筛选)
   async getReceivedFriendRequests(
     userId: string,
     status?: FriendRequestStatus | FriendRequestStatus[],
   ): Promise<any[]> {
-    const query: any = { receiver: userId };
+    const query: any = {
+      receiver: userId,
+      receiverDeleted: false, // --- 新增：只获取接收者未删除的 ---
+    };
     if (status) {
       if (Array.isArray(status)) {
         query.status = { $in: status };
       } else {
         query.status = status;
       }
-    } else {
-      // 默认获取所有状态的，或者只获取 pending，根据你的需求
-      // query.status = 'pending'; // 如果只想获取未处理的
     }
+    // ... (rest of the method)
     const requests = await this.friendRequestModel
       .find(query)
       .populate('sender', 'username nickname avatar')
-      .sort({ createdAt: -1 }) // 按创建时间降序
+      .sort({ createdAt: -1 })
       .lean();
     return requests;
   }
 
-  // 获取发送的好友请求
   // 获取发送的好友请求 (可以考虑添加 status 参数进行筛选)
   async getSentFriendRequests(
     userId: string,
     status?: FriendRequestStatus | FriendRequestStatus[],
   ): Promise<any[]> {
-    const query: any = { sender: userId };
+    const query: any = {
+      sender: userId,
+      senderDeleted: false, // --- 新增：只获取发送者未删除的 ---
+    };
     if (status) {
       if (Array.isArray(status)) {
         query.status = { $in: status };
@@ -243,10 +245,11 @@ export class FriendsService {
         query.status = status;
       }
     }
+    // ... (rest of the method)
     const requests = await this.friendRequestModel
       .find(query)
       .populate('receiver', 'username nickname avatar')
-      .sort({ createdAt: -1 }) // 按创建时间降序
+      .sort({ createdAt: -1 })
       .lean();
     return requests;
   }
@@ -329,6 +332,57 @@ export class FriendsService {
     }
 
     return { success: true, action, updatedStatus: request.status };
+  }
+
+  // 删除非待处理的好友请求记录
+  async deleteFriendRequestRecord(
+    userId: string, // ID of the user requesting the deletion
+    requestId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const request = await this.friendRequestModel.findById(requestId);
+
+    if (!request) {
+      throw new NotFoundException('好友请求记录不存在');
+    }
+
+    const isSender = request.sender.toString() === userId;
+    const isReceiver = request.receiver.toString() === userId;
+
+    if (!isSender && !isReceiver) {
+      throw new ForbiddenException('你没有权限操作此好友请求记录');
+    }
+
+    // 仍然只允许操作非 pending 状态的请求记录（根据你之前的逻辑）
+    // 如果要允许隐藏 pending 请求，需要调整此处的逻辑
+    if (request.status === FriendRequestStatus.PENDING) {
+      throw new BadRequestException(
+        '不能删除待处理的好友请求记录，请先处理或撤销。',
+      );
+    }
+
+    let updated = false;
+    if (isSender && !request.senderDeleted) {
+      request.senderDeleted = true;
+      updated = true;
+      this.logger.log(`用户 ${userId} (发送者) 标记删除好友请求 ${requestId}`);
+    } else if (isReceiver && !request.receiverDeleted) {
+      request.receiverDeleted = true;
+      updated = true;
+      this.logger.log(`用户 ${userId} (接收者) 标记删除好友请求 ${requestId}`);
+    }
+
+    if (updated) {
+      await request.save();
+    }
+
+    // 如果双方都已删除，则从数据库中物理删除
+    if (request.senderDeleted && request.receiverDeleted) {
+      await this.friendRequestModel.findByIdAndDelete(requestId);
+      this.logger.log(`好友请求 ${requestId} 已被双方删除，已从数据库中移除。`);
+      return { success: true, message: '好友请求记录已从数据库彻底删除' };
+    }
+
+    return { success: true, message: '好友请求记录已从您的视图中移除' };
   }
 
   // 设置好友备注

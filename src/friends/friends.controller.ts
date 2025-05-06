@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards, Request, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards, Request, Query, Req } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { FriendsService } from './friends.service';
 
@@ -45,6 +45,16 @@ export class FriendsController {
   ) {
     const userId = req.user.userId;
     return this.friendsService.handleFriendRequest(userId, requestId, dto.action);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('requests/:requestId')
+  async deleteFriendRequestRecord(
+    @Req() req,
+    @Param('requestId') requestId: string,
+  ) {
+    const userId = req.user.userId; // Assuming userId is in JWT payload
+    return this.friendsService.deleteFriendRequestRecord(userId, requestId);
   }
 
   // 设置好友备注
