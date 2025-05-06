@@ -1,16 +1,16 @@
 // src/auth/strategies/jwt.strategy.ts
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private readonly configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // 从 Authorization Bearer Header 提取 Token
       ignoreExpiration: false, // 不忽略过期
-      secretOrKey:
-        process.env.JWT_SECRET || 'THIS_IS_A_VERY_BAD_SECRET_CHANGE_IT', // !! 必须与 AuthModule 一致 !!
+      secretOrKey: configService.get<string>('JWT_SECRET')!, // 从配置中获取密钥
     });
   }
 

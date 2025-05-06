@@ -5,7 +5,6 @@ import { UsersModule } from '../users/users.module'; // 导入 UsersModule
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './strategies/jwt.strategy'; // 稍后创建
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -18,6 +17,6 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
   ],
   providers: [AuthService, JwtStrategy], // 注册 AuthService 和 JwtStrategy
   controllers: [AuthController],
-  exports: [AuthService, PassportModule, JwtModule], // 导出 AuthService 和 Passport/JWT 模块供其他地方使用
+  exports: [AuthService, PassportModule], // 导出 AuthService 和 Passport/JWT 模块供其他地方使用
 })
 export class AuthModule {}

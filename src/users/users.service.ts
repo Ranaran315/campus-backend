@@ -259,7 +259,7 @@ export class UsersService {
         { email: searchRegex }
       ]
     })
-      .select('username nickname avatar realname')
+      .select('username nickname avatar realname userType')
       .limit(10)
       .lean();
   }

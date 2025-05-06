@@ -5,6 +5,8 @@ import { FriendsService } from './friends.service';
 import { FriendRelation, FriendRelationSchema } from './friends.schema';
 import { FriendRequest, FriendRequestSchema } from './friendRequest.schema';
 import { User, UserSchema } from '../users/user.schema';
+import { NotificationsModule } from 'src/notifications/notifications.module';
+import { UsersModule } from 'src/users/users.module';
 
 @Module({
   imports: [
@@ -13,6 +15,8 @@ import { User, UserSchema } from '../users/user.schema';
       { name: FriendRequest.name, schema: FriendRequestSchema },
       { name: User.name, schema: UserSchema }
     ]),
+    NotificationsModule, // 引入NotificationsModule
+    UsersModule // 引入UsersModule
   ],
   controllers: [FriendsController],
   providers: [FriendsService],
