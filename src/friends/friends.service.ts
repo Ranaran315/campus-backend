@@ -514,4 +514,28 @@ export class FriendsService {
     await Promise.all(updateOperations);
     return { success: true, category, count: friendIds.length };
   }
+
+  // 获取单个好友关系的详细信息
+  async getFriendRelationDetails(
+    userId: string, // 当前登录用户的 ID
+    relationId: string, // 好友关系文档的 _id
+  ): Promise<FriendRelationDocument | null> {
+    // 返回 FriendRelationDocument 类型
+    const relation = await this.friendRelationModel
+      .findOne({
+        _id: relationId,
+        user: userId, // 确保这条好友关系属于当前用户
+      })
+      .populate<{ friend: UserDocument }>({
+        // 明确 populate 的类型
+        path: 'friend',
+        select: '-password', // 选择需要返回的用户公开字段
+      })
+      .lean(); // 使用 lean() 以获得普通 JS 对象，如果不需要 Mongoose 文档方法
+
+    if (!relation) {
+      throw new NotFoundException('好友关系不存在或不属于您');
+    }
+    return relation as FriendRelationDocument; // 断言为 FriendRelationDocument
+  }
 }

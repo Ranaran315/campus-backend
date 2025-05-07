@@ -47,6 +47,7 @@ export class FriendsController {
     return this.friendsService.handleFriendRequest(userId, requestId, dto.action);
   }
 
+  // 删除好友请求记录
   @UseGuards(JwtAuthGuard)
   @Delete('requests/:requestId')
   async deleteFriendRequestRecord(
@@ -57,8 +58,20 @@ export class FriendsController {
     return this.friendsService.deleteFriendRequestRecord(userId, requestId);
   }
 
+  // 新增：获取单个好友关系的详细信息
+  // 将此端点放在 /:friendId/remark 和 /:friendId (DELETE) 之前，以避免路由冲突
+  // 或者使用更明确的路径，如 /relation/:relationId
+  @Get('relation/:relationId') // 使用更明确的路径
+  async getFriendRelationDetails(
+    @Request() req,
+    @Param('relationId') relationId: string,
+  ) {
+    const userId = req.user.userId;
+    return this.friendsService.getFriendRelationDetails(userId, relationId);
+  }
+
   // 设置好友备注
-  @Patch(':friendId/remark')
+  @Patch(':friendId/remark') // 注意：这里的 friendId 是 User._id
   setFriendRemark(
     @Request() req,
     @Param('friendId') friendId: string,
@@ -69,7 +82,7 @@ export class FriendsController {
   }
 
   // 删除好友
-  @Delete(':friendId')
+  @Delete(':friendId') // 注意：这里的 friendId 是 User._id
   removeFriend(@Request() req, @Param('friendId') friendId: string) {
     const userId = req.user.userId;
     return this.friendsService.removeFriend(userId, friendId);
