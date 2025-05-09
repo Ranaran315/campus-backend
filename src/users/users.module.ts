@@ -1,12 +1,9 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from './user.schema';
-import {
-  FriendRelation,
-  FriendRelationSchema,
-} from 'src/friends/friends.schema';
+import { FriendsModule } from 'src/friends/friends.module';
 
 @Module({
   imports: [
@@ -16,11 +13,8 @@ import {
         name: User.name,
         schema: UserSchema,
       },
-      {
-        name: FriendRelation.name,
-        schema: FriendRelationSchema,
-      },
     ]),
+    forwardRef(() => FriendsModule),
   ],
   controllers: [UsersController],
   providers: [UsersService],

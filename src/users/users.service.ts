@@ -5,6 +5,8 @@ import {
   ConflictException,
   InternalServerErrorException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -23,7 +25,7 @@ export class UsersService {
   // 注入 User 的 Mongoose Model
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @InjectModel(FriendsService.name)
+    @Inject(forwardRef(() => FriendsService)) // <--- 使用 @Inject 和 forwardRef 注入 FriendsService
     private readonly friendsService: FriendsService,
   ) {}
 

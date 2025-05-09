@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -74,7 +76,8 @@ export class FriendsService {
     @InjectModel(FriendCategory.name) // 新增 FriendCategoryModel 注入
     private friendCategoryModel: Model<FriendCategoryDocument>, // 新增
     private notificationsGateway: NotificationsGateway,
-    private usersService: UsersService, // 注入UsersService
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService, // 注入UsersService
   ) {}
 
   private readonly logger = new Logger('FriendsService'); // 添加日志记录器
