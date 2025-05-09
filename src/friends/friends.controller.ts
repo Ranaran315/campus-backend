@@ -95,6 +95,15 @@ export class FriendsController {
     return this.friendsService.getFriendCategories(userId);
   }
 
+  @Post('categories')
+  async createFriendCategory(
+    @Request() req,
+    @Body() dto: { name: string } // DTO 包含分类名称
+  ) {
+    const userId = req.user.userId;
+    return this.friendsService.createFriendCategory(userId, dto.name);
+  }
+
   // 获取分类后的好友列表
   @Get('by-category')
   async getFriendsByCategory(@Request() req) {
@@ -113,13 +122,13 @@ export class FriendsController {
     return this.friendsService.updateFriendCategory(userId, friendId, dto.category);
   }
 
-  // 创建新分类并移动好友
-  @Post('categories')
-  async createCategoryAndMoveFriends(
-    @Request() req,
-    @Body() dto: { category: string, friendIds: string[] }
-  ) {
-    const userId = req.user.userId;
-    return this.friendsService.createCategoryAndMoveFriends(userId, dto.category, dto.friendIds);
-  }
+  // // 创建新分类并移动好友
+  // @Post('categories')
+  // async createCategoryAndMoveFriends(
+  //   @Request() req,
+  //   @Body() dto: { category: string, friendIds: string[] }
+  // ) {
+  //   const userId = req.user.userId;
+  //   return this.friendsService.createCategoryAndMoveFriends(userId, dto.category, dto.friendIds);
+  // }
 }

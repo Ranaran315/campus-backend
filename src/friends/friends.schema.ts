@@ -3,7 +3,21 @@ import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { User } from '../users/user.schema';
 
+export type FriendCategoryDocument = FriendCategory & Document;
 export type FriendRelationDocument = FriendRelation & Document;
+
+@Schema({ timestamps: true })
+export class FriendCategory {
+  @Prop({ required: true, trim: true })
+  name: string; // 分类名称
+
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  user: User | Types.ObjectId; // 创建此分类的用户ID
+}
+
+export const FriendCategorySchema = SchemaFactory.createForClass(FriendCategory);
+//确保用户创建的分类名唯一
+FriendCategorySchema.index({ user: 1, name: 1 }, { unique: true });
 
 @Schema({ timestamps: true })
 export class FriendRelation {
@@ -19,8 +33,8 @@ export class FriendRelation {
   @Prop({ default: 'accepted' })
   status: string; // 好友关系状态: 'pending', 'accepted', 'blocked'
   
-  @Prop({ default: 'default' })
-  category: string; // 好友分组/分类
+  @Prop({ type: Types.ObjectId, ref: 'FriendCategory', required: false, default: null }) // 新增 categoryId 字段引用 FriendCategory
+  categoryId: Types.ObjectId | null; // 好友所属分类ID，可以为空表示未分类
   
 //   @Prop({ default: false })
 //   isFavorite: boolean; // 是否为特别/星标好友

@@ -18,6 +18,8 @@ export class User {
   @Prop({ required: true, default: 'male' })
   gender: string; // 性别
   @Prop()
+  avatar: string; // 头像
+  @Prop()
   birthday: Date; // 生日
   @Prop()
   description: string; // 个人简介
