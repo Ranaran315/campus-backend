@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards, Request, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards, Request, Query, Req, Put } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { FriendsService } from './friends.service';
 
@@ -95,6 +95,7 @@ export class FriendsController {
     return this.friendsService.getFriendCategories(userId);
   }
 
+  // 创建分类
   @Post('categories')
   async createFriendCategory(
     @Request() req,
@@ -102,6 +103,17 @@ export class FriendsController {
   ) {
     const userId = req.user.userId;
     return this.friendsService.createFriendCategory(userId, dto.name);
+  }
+
+  // 修改好友分类名称
+  @Put('categories/:categoryId') // 或者使用 PATCH
+  async updateFriendCategoryName(
+    @Request() req,
+    @Param('categoryId') categoryId: string,
+    @Body() dto: { name: string }
+  ) {
+    const userId = req.user.userId;
+    return this.friendsService.updateFriendCategoryName(userId, categoryId, dto.name);
   }
 
   // 获取分类后的好友列表
@@ -120,6 +132,16 @@ export class FriendsController {
   ) {
     const userId = req.user.userId;
     return this.friendsService.updateFriendCategory(userId, friendId, dto.category);
+  }
+
+  // 删除好友分类
+  @Delete('categories/:categoryId')
+  async deleteFriendCategory(
+    @Request() req,
+    @Param('categoryId') categoryId: string,
+  ) {
+    const userId = req.user.userId;
+    return this.friendsService.deleteFriendCategory(userId, categoryId); // 调用 service 方法
   }
 
   // // 创建新分类并移动好友

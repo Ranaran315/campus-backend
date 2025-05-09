@@ -10,13 +10,22 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './user.schema'; // 导入 Schema 和 文档类型
 import { CreateUserDto } from './dto/create-user.dto';
-import { ChangePasswordDto, UpdateProfileDto, UpdateUserDto } from './dto/update-user.dto';
+import {
+  ChangePasswordDto,
+  UpdateProfileDto,
+  UpdateUserDto,
+} from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt'; // 导入 bcrypt 用于密码哈希
+import { FriendsService } from 'src/friends/friends.service';
 
 @Injectable()
 export class UsersService {
   // 注入 User 的 Mongoose Model
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) { }
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(FriendsService.name)
+    private readonly friendsService: FriendsService,
+  ) {}
 
   // --- 创建用户 (CREATE) ---
   async create(createUserDto: CreateUserDto): Promise<Omit<User, 'password'>> {
@@ -103,6 +112,7 @@ export class UsersService {
     const createdUser = new this.userModel(userToCreatePayload);
     try {
       const savedUser = await createdUser.save();
+      await this.friendsService.createDefaultCategoryForUser(savedUser._id);
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password: _, ...result } = savedUser.toObject();
       return result;
@@ -142,7 +152,6 @@ export class UsersService {
     id: string,
     updateUserDto: UpdateUserDto,
   ): Promise<Omit<User, 'password'>> {
-
     // 查找并更新用户，{ new: true } 会返回更新后的文档
     const updatedUser = await this.userModel
       .findByIdAndUpdate(
@@ -168,19 +177,31 @@ export class UsersService {
     if (updateProfileDto.email || updateProfileDto.phone) {
       const queryConditions = [] as any[];
       if (updateProfileDto.email) {
-        queryConditions.push({ email: updateProfileDto.email, _id: { $ne: userId } });
+        queryConditions.push({
+          email: updateProfileDto.email,
+          _id: { $ne: userId },
+        });
       }
       if (updateProfileDto.phone) {
-        queryConditions.push({ phone: updateProfileDto.phone, _id: { $ne: userId } });
+        queryConditions.push({
+          phone: updateProfileDto.phone,
+          _id: { $ne: userId },
+        });
       }
 
       if (queryConditions.length > 0) {
-        const existingUser = await this.userModel.findOne({ $or: queryConditions }).exec();
+        const existingUser = await this.userModel
+          .findOne({ $or: queryConditions })
+          .exec();
         if (existingUser) {
           let conflictField = '';
-          if (existingUser.email === updateProfileDto.email) conflictField = '邮箱';
-          else if (existingUser.phone === updateProfileDto.phone) conflictField = '手机号';
-          throw new ConflictException(`${conflictField} '${updateProfileDto[conflictField === '邮箱' ? 'email' : 'phone']}' 已被其他用户占用。`);
+          if (existingUser.email === updateProfileDto.email)
+            conflictField = '邮箱';
+          else if (existingUser.phone === updateProfileDto.phone)
+            conflictField = '手机号';
+          throw new ConflictException(
+            `${conflictField} '${updateProfileDto[conflictField === '邮箱' ? 'email' : 'phone']}' 已被其他用户占用。`,
+          );
         }
       }
     }
@@ -207,7 +228,10 @@ export class UsersService {
     changePasswordDto: ChangePasswordDto,
   ): Promise<void> {
     // 1. 查找用户 (需要包含密码以进行比较)
-    const user = await this.userModel.findById(userId).select('+password').exec();
+    const user = await this.userModel
+      .findById(userId)
+      .select('+password')
+      .exec();
     if (!user) {
       throw new NotFoundException(`ID 为 '${userId}' 的用户不存在。`);
     }
@@ -251,14 +275,15 @@ export class UsersService {
     // 构建搜索条件
     const searchRegex = new RegExp(query, 'i');
 
-    return this.userModel.find({
-      $or: [
-        { username: searchRegex },
-        { nickname: searchRegex },
-        { realname: searchRegex },
-        { email: searchRegex }
-      ]
-    })
+    return this.userModel
+      .find({
+        $or: [
+          { username: searchRegex },
+          { nickname: searchRegex },
+          { realname: searchRegex },
+          { email: searchRegex },
+        ],
+      })
       .select('username nickname avatar realname userType')
       .limit(10)
       .lean();

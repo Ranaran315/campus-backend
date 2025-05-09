@@ -6,6 +6,7 @@ import { User } from '../users/user.schema';
 export type FriendCategoryDocument = FriendCategory & Document;
 export type FriendRelationDocument = FriendRelation & Document;
 
+// 好友分类
 @Schema({ timestamps: true })
 export class FriendCategory {
   @Prop({ required: true, trim: true })
@@ -13,12 +14,17 @@ export class FriendCategory {
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   user: User | Types.ObjectId; // 创建此分类的用户ID
+
+  @Prop({ type: Boolean, default: false, required: true }) // Added isDefault
+  isDefault: boolean;
 }
 
 export const FriendCategorySchema = SchemaFactory.createForClass(FriendCategory);
 //确保用户创建的分类名唯一
 FriendCategorySchema.index({ user: 1, name: 1 }, { unique: true });
 
+
+// 好友关系
 @Schema({ timestamps: true })
 export class FriendRelation {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
