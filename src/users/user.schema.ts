@@ -63,6 +63,10 @@ export class User {
   phone: string; // 手机号
   @Prop({ default: 'active' })
   status: string; // 用户状态，正常 or 禁用
+  @Prop()
+  onlineStatus: string; // 在线状态，在线 or 离线
+  @Prop()
+  lastOnlineTime: Date; // 最后在线时间
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
