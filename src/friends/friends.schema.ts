@@ -40,7 +40,7 @@ export class FriendRelation {
   status: string; // 好友关系状态: 'pending', 'accepted', 'blocked'
   
   @Prop({ type: Types.ObjectId, ref: 'FriendCategory', required: false, default: null }) // 新增 categoryId 字段引用 FriendCategory
-  categoryId: Types.ObjectId | null; // 好友所属分类ID，可以为空表示未分类
+  category: Types.ObjectId | null; // 好友所属分类ID
   
 //   @Prop({ default: false })
 //   isFavorite: boolean; // 是否为特别/星标好友

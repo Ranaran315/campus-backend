@@ -47,7 +47,7 @@ export interface LeanPopulatedFriendRelation {
   friend: PopulatedFriendInRelation;
   remark: string;
   status: string;
-  categoryId: Types.ObjectId | null; // This is the ObjectId from the DB or null
+  category: Types.ObjectId | null; // This is the ObjectId from the DB or null
   createdAt?: Date;
   updatedAt?: Date;
   // Include other fields from FriendRelation schema if necessary
@@ -62,7 +62,7 @@ export interface AlphabeticallyGroupedFriends {
 
 // The type for elements of the 'result' array in getFriendsByCategory
 export interface CategorizedFriendsGroup {
-  categoryId: string | null; // string for actual categories, null for default/uncategorized
+  category: string | null; // string for actual categories, null for default/uncategorized
   categoryName: string;
   friends: LeanPopulatedFriendRelation[];
   isDefault: boolean; // Indicates if this is the default category
@@ -97,15 +97,15 @@ export class FriendsService {
         'friend',
         'username nickname avatar onlineStatus lastOnlineTime',
       )
-      .populate({ path: 'categoryId', select: 'name _id isDefault' }) // 填充分类信息
+      .populate({ path: 'category', select: 'name _id isDefault' }) // 填充分类信息
       .lean();
 
     // 在应用层面进行排序：按分类名，然后按好友备注或昵称
     friendsRelations.sort((a, b) => {
-      const categoryA = a.categoryId as
+      const categoryA = a.category as
         | (FriendCategory & { _id: Types.ObjectId; isDefault?: boolean })
         | null;
-      const categoryB = b.categoryId as
+      const categoryB = b.category as
         | (FriendCategory & { _id: Types.ObjectId; isDefault?: boolean })
         | null;
 
@@ -406,7 +406,7 @@ export class FriendsService {
       await this.friendRelationModel.findOneAndUpdate(
         { user: receiverObjectId, friend: senderObjectId },
         {
-          $set: { status: 'accepted', categoryId: receiverDefaultCategory._id },
+          $set: { status: 'accepted', category: receiverDefaultCategory._id },
         },
         { upsert: true, new: true },
       );
@@ -414,7 +414,7 @@ export class FriendsService {
       // 创建反向关系 (friend -> user)
       await this.friendRelationModel.findOneAndUpdate(
         { user: senderObjectId, friend: receiverObjectId },
-        { $set: { status: 'accepted', categoryId: senderDefaultCategory._id } },
+        { $set: { status: 'accepted', category: senderDefaultCategory._id } },
         { upsert: true, new: true },
       );
     }
@@ -646,11 +646,11 @@ export class FriendsService {
     for (const category of categories) {
       const friendsInCategory = relations.filter(
         (relation) =>
-          relation.categoryId &&
-          relation.categoryId.toString() === category._id.toString(),
+          relation.category &&
+          relation.category.toString() === category._id.toString(),
       );
       result.push({
-        categoryId: category._id.toString(), // category._id is Types.ObjectId
+        category: category._id.toString(), // category._id is Types.ObjectId
         categoryName: category.name,
         friends: friendsInCategory,
         isDefault: category.isDefault
@@ -660,20 +660,20 @@ export class FriendsService {
       ); // 添加日志
     }
 
-    // // 4. 处理可能仍然存在的 categoryId 为 null 的好友 (作为一种兼容或错误恢复)
-    // // 理想情况下，在迁移和新逻辑下，不应有 categoryId 为 null 的好友
+    // // 4. 处理可能仍然存在的 category 为 null 的好友 (作为一种兼容或错误恢复)
+    // // 理想情况下，在迁移和新逻辑下，不应有 category 为 null 的好友
     // const friendsWithNullCategory = relations.filter(
-    //   (relation) => !relation.categoryId,
+    //   (relation) => !relation.category,
     // );
 
     // if (friendsWithNullCategory.length > 0) {
     //   this.logger.warn(
-    //     `User [${userId}] - Found ${friendsWithNullCategory.length} friends with null categoryId. Moving them to default category display.`,
+    //     `User [${userId}] - Found ${friendsWithNullCategory.length} friends with null category. Moving them to default category display.`,
     //   );
     //   const defaultCategory = categories.find((c) => c.isDefault);
     //   if (defaultCategory) {
     //     const defaultGroup = result.find(
-    //       (g) => g.categoryId === defaultCategory._id.toString(),
+    //       (g) => g.category === defaultCategory._id.toString(),
     //     );
     //     if (defaultGroup) {
     //       defaultGroup.friends.push(...friendsWithNullCategory);
@@ -683,7 +683,7 @@ export class FriendsService {
     //     } else {
     //       // This case should ideally not happen if defaultCategory is always in `categories` and processed
     //       result.push({
-    //         categoryId: defaultCategory._id.toString(),
+    //         category: defaultCategory._id.toString(),
     //         categoryName: defaultCategory.name,
     //         friends: friendsWithNullCategory,
     //       });
@@ -694,10 +694,10 @@ export class FriendsService {
     //   } else {
     //     // 如果连默认分类都找不到（严重错误），则创建一个临时的“未分类”组
     //     this.logger.error(
-    //       `User [${userId}] - Default category not found. Orphaned friends with null categoryId will be in "未分类".`,
+    //       `User [${userId}] - Default category not found. Orphaned friends with null category will be in "未分类".`,
     //     );
     //     result.push({
-    //       categoryId: null, // 表示这些是真正未被归类的
+    //       category: null, // 表示这些是真正未被归类的
     //       categoryName: '未分类 (异常)',
     //       friends: friendsWithNullCategory,
     //     });
@@ -706,8 +706,8 @@ export class FriendsService {
 
     // // 排序：默认分类优先，其他按名称
     // result.sort((a, b) => {
-    //   const catA = categories.find((c) => c._id.toString() === a.categoryId);
-    //   const catB = categories.find((c) => c._id.toString() === b.categoryId);
+    //   const catA = categories.find((c) => c._id.toString() === a.category);
+    //   const catB = categories.find((c) => c._id.toString() === b.category);
 
     //   if (catA && catA.isDefault && !(catB && catB.isDefault)) return -1;
     //   if (!(catA && catA.isDefault) && catB && catB.isDefault) return 1;
@@ -796,21 +796,21 @@ export class FriendsService {
       );
     }
 
-    // 将此分类下的所有好友的 categoryId 更新为默认分类的 ID
+    // 将此分类下的所有好友的 category 更新为默认分类的 ID
     const updateResult = await this.friendRelationModel.updateMany(
-      { user: userObjectId, categoryId: categoryObjectId },
-      { $set: { categoryId: defaultCategory._id } },
+      { user: userObjectId, category: categoryObjectId },
+      { $set: { category: defaultCategory._id } },
     );
 
     this.logger.log(
-      `User [${userId}] - Category [${categoryId}]: Moved ${updateResult.modifiedCount} friends to default category.`,
+      `User [${userId}] - Category [${category}]: Moved ${updateResult.modifiedCount} friends to default category.`,
     );
 
     // 3. 删除该分类
     await this.friendCategoryModel.deleteOne({ _id: categoryObjectId, user: userObjectId });
 
     this.logger.log(
-      `User [${userId}] - Category [${categoryId}] deleted successfully.`,
+      `User [${userId}] - Category [${category}] deleted successfully.`,
     );
 
     return {
@@ -843,7 +843,7 @@ export class FriendsService {
 
     if (newCategoryId) {
       const newCategoryObjectId = new Types.ObjectId(newCategoryId);
-      // 校验 categoryId 是否有效且属于该用户
+      // 校验 category 是否有效且属于该用户
       const categoryExists = await this.friendCategoryModel.findOne({
         _id: newCategoryObjectId,
         user: userObjectId,
@@ -865,7 +865,7 @@ export class FriendsService {
       targetCategoryId = defaultCategory._id as Types.ObjectId;
     }
 
-    relation.categoryId = targetCategoryId;
+    relation.category = targetCategoryId;
     return await relation.save();
   }
 
@@ -887,9 +887,9 @@ export class FriendsService {
         path: 'friend',
         select: '-password', // 选择需要返回的用户公开字段
       })
-      .populate<{ categoryId: FriendCategoryDocument  & { _id: Types.ObjectId; isDefault?: boolean } | null }>({
-        // 新增：填充 categoryId
-        path: 'categoryId',
+      .populate<{ category: FriendCategoryDocument  & { _id: Types.ObjectId; isDefault?: boolean } | null }>({
+        // 新增：填充 category
+        path: 'category',
         select: 'name _id isDefault',
       })
       .lean() as LeanPopulatedFriendRelation | null;; // 使用 lean() 以获得普通 JS 对象，如果不需要 Mongoose 文档方法
