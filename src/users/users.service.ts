@@ -274,12 +274,11 @@ export class UsersService {
     userId: string | Types.ObjectId,
     changePasswordDto: ChangePasswordDto,
   ): Promise<void> {
-    // 1. 查找用户 (需要包含密码以进行比较)
-    const user = await this.userModel
-      .findById(userId)
-      .select('+password')
-      .exec();
-    if (!user) {
+    const userObjectId = transformObjectId(userId); // 确保 userId 是 ObjectId
+
+    // 1. 验证用户是否存在 (可选，但推荐)
+    const userExists = await this.userModel.exists({ _id: userObjectId });
+    if (!userExists) {
       throw new NotFoundException(`ID 为 '${userId}' 的用户不存在。`);
     }
 
@@ -290,12 +289,29 @@ export class UsersService {
       saltRounds,
     );
 
-    // 3. 更新密码
-    user.password = hashedNewPassword;
+    // 3. 直接更新密码字段
     try {
-      await user.save();
+      const updateResult = await this.userModel.updateOne(
+        { _id: userObjectId },
+        { $set: { password: hashedNewPassword } },
+      );
+
+      if (updateResult.matchedCount === 0) {
+        // 理论上在 userExists 检查后不应发生，但作为额外的安全措施
+        throw new NotFoundException(`ID 为 '${userId}' 的用户不存在。`);
+      }
+      if (updateResult.modifiedCount === 0) {
+        // 可能新密码与旧密码相同，或者更新由于某种原因未生效
+        // 根据业务需求，这里可以不抛出错误，或者记录一个警告
+        console.warn(
+          `Password for user ID '${userId}' was not modified. It might be the same as the old password.`,
+        );
+      }
     } catch (error) {
-      console.error('修改密码时保存失败:', error);
+      console.error('修改密码时更新数据库失败:', error);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
       throw new InternalServerErrorException('修改密码失败，请稍后重试。');
     }
   }
