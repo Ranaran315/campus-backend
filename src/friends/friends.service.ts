@@ -9,7 +9,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, ObjectId, Types } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { User, UserDocument } from 'src/users/user.schema';
 import {
   FriendRequest,
@@ -26,6 +26,7 @@ import * as pinyin from 'pinyin'; // 用于处理中文拼音首字母
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { UsersService } from 'src/users/users.service';
 import { Logger } from '@nestjs/common';
+import { transformObjectId } from 'src/utils/transform';
 
 interface UserInfo {
   _id: Types.ObjectId | string;
@@ -92,8 +93,8 @@ export class FriendsService {
   private readonly logger = new Logger('FriendsService'); // 添加日志记录器
 
   // 获取用户的好友列表（分类）
-  async getFriends(userId: string): Promise<any[]> {
-    const userObjectId = new Types.ObjectId(userId);
+  async getFriends(userId: string | Types.ObjectId): Promise<any[]> {
+    const userObjectId = transformObjectId(userId);
     const friendsRelations = await this.friendRelationModel
       .find({ user: userObjectId, status: 'accepted' })
       .populate(
@@ -146,8 +147,10 @@ export class FriendsService {
   }
 
   // 获取用户的好友列表（按字母排序）
-  async getFriendsAlphabetically(userId: string): Promise<any> {
-    const userObjectId = new Types.ObjectId(userId);
+  async getFriendsAlphabetically(
+    userId: string | Types.ObjectId,
+  ): Promise<any> {
+    const userObjectId = transformObjectId(userId);
     // 1. 获取用户的所有好友关系
     const relations = await this.friendRelationModel
       .find({ user: userObjectId, status: 'accepted' })
@@ -222,17 +225,17 @@ export class FriendsService {
 
   // 发送好友请求
   async sendFriendRequest(
-    senderId: string,
-    receiverId: string,
+    senderId: string | Types.ObjectId,
+    receiverId: string | Types.ObjectId,
     message?: string,
   ): Promise<any> {
+    const senderObjectId = transformObjectId(senderId);
+    const receiverObjectId = transformObjectId(receiverId);
+
     // 检查发送者与接收者是否相同
-    if (senderId === receiverId) {
+    if (senderObjectId.toString() === receiverObjectId.toString()) {
       throw new BadRequestException('不能添加自己为好友。');
     }
-
-    const senderObjectId = new Types.ObjectId(senderId);
-    const receiverObjectId = new Types.ObjectId(receiverId);
 
     // 检查用户是否存在
     const receiver = await this.userModel.findById(receiverId);
@@ -282,7 +285,7 @@ export class FriendsService {
       if (senderInfo) {
         // 准备通知数据
         const notificationData = {
-          requestId: (newRequest._id as ObjectId).toString(),
+          requestId: (newRequest._id as Types.ObjectId).toString(),
           sender: {
             _id: senderInfo._id.toString(),
             username: senderInfo.username,
@@ -296,7 +299,7 @@ export class FriendsService {
 
         // 发送WebSocket通知
         this.notificationsGateway.sendFriendRequestNotification(
-          receiverId,
+          receiverObjectId.toString(),
           notificationData,
         );
       }
@@ -310,10 +313,10 @@ export class FriendsService {
 
   // 获取收到的好友请求 (可以考虑添加 status 参数进行筛选)
   async getReceivedFriendRequests(
-    userId: string,
+    userId: string | Types.ObjectId,
     status?: FriendRequestStatus | FriendRequestStatus[],
   ): Promise<any[]> {
-    const userObjectId = new Types.ObjectId(userId);
+    const userObjectId = transformObjectId(userId);
     const query: any = {
       receiver: userObjectId,
       receiverDeleted: false,
@@ -336,10 +339,10 @@ export class FriendsService {
 
   // 获取发送的好友请求 (可以考虑添加 status 参数进行筛选)
   async getSentFriendRequests(
-    userId: string,
+    userId: string | Types.ObjectId,
     status?: FriendRequestStatus | FriendRequestStatus[],
   ): Promise<any[]> {
-    const userObjectId = new Types.ObjectId(userId);
+    const userObjectId = transformObjectId(userId);
     const query: any = {
       sender: userObjectId,
       senderDeleted: false, // --- 新增：只获取发送者未删除的 ---
@@ -362,20 +365,29 @@ export class FriendsService {
 
   // 处理好友请求
   async handleFriendRequest(
-    userId: string,
-    requestId: string,
+    userId: string | Types.ObjectId,
+    requestId: string | Types.ObjectId,
     action: string,
   ): Promise<any> {
-    const requestObjectId = new Types.ObjectId(requestId);
-    const handlerUserObjectId = new Types.ObjectId(userId);
+    const requestObjectId = transformObjectId(requestId);
+    const handlerUserObjectId = transformObjectId(userId);
 
     const request = await this.friendRequestModel.findById(requestObjectId);
     if (!request) {
       throw new NotFoundException('好友请求不存在');
     }
 
+    this.logger.debug(
+      `处理好友请求: request.receiver: ${typeof request.receiver.toString()}, handlerUserObjectId: ${typeof userId}, 操作: ${action}`,
+    ); // 修改日志，更清晰地展示比较对象
+
     // 确保只有接收者可以处理请求
+    // 将 ObjectId 转换为字符串进行比较，或者使用 .equals() 方法
     if (request.receiver.toString() !== userId) {
+      // 使用 .equals() 并确保 request.receiver 是 ObjectId
+      this.logger.warn(
+        `权限检查失败: handlerUserObjectId (${handlerUserObjectId.toString()}) 与 request.receiver (${(request.receiver as Types.ObjectId).toString()}) 不匹配。`,
+      );
       throw new ForbiddenException('没有权限处理此请求');
     }
 
@@ -439,7 +451,7 @@ export class FriendsService {
         this.notificationsGateway.sendFriendRequestUpdateNotification(
           senderId,
           {
-            requestId: (request._id as ObjectId).toString(),
+            requestId: (request._id as Types.ObjectId).toString(),
             status: (action as 'accepted') || 'rejected', // 'accepted' or 'rejected'
             // 可以选择性地包含处理者信息
             // handler: { _id: receiverInfo._id, nickname: receiverInfo.nickname || receiverInfo.username }
@@ -455,18 +467,19 @@ export class FriendsService {
 
   // 删除非待处理的好友请求记录
   async deleteFriendRequestRecord(
-    userId: string, // ID of the user requesting the deletion
+    userId: string | Types.ObjectId, // ID of the user requesting the deletion
     requestId: string,
   ): Promise<{ success: boolean; message: string }> {
-    const requestObjectId = new Types.ObjectId(requestId);
+    const userObjectId = transformObjectId(userId);
+    const requestObjectId = transformObjectId(requestId);
     const request = await this.friendRequestModel.findById(requestObjectId);
 
     if (!request) {
       throw new NotFoundException('好友请求记录不存在');
     }
 
-    const isSender = request.sender.toString() === userId;
-    const isReceiver = request.receiver.toString() === userId;
+    const isSender = request.sender.toString() === userObjectId.toString();
+    const isReceiver = request.receiver.toString() === userObjectId.toString();
 
     if (!isSender && !isReceiver) {
       throw new ForbiddenException('你没有权限操作此好友请求记录');
@@ -507,11 +520,11 @@ export class FriendsService {
 
   // 设置好友备注
   async setFriendRemark(
-    userId: string,
+    userId: string | Types.ObjectId,
     friendId: string,
     remark: string,
   ): Promise<any> {
-    const userObjectId = new Types.ObjectId(userId);
+    const userObjectId = transformObjectId(userId);
     const friendObjectId = new Types.ObjectId(friendId);
     const relation = await this.friendRelationModel.findOne({
       user: userObjectId,
@@ -528,9 +541,12 @@ export class FriendsService {
   }
 
   // 删除好友
-  async removeFriend(userId: string, friendId: string): Promise<any> {
-    const userObjectId = new Types.ObjectId(userId);
-    const friendObjectId = new Types.ObjectId(friendId);
+  async removeFriend(
+    userId: string | Types.ObjectId,
+    friendId: string | Types.ObjectId,
+  ): Promise<any> {
+    const userObjectId = transformObjectId(userId);
+    const friendObjectId = transformObjectId(friendId);
     // 删除双向好友关系
     await this.friendRelationModel.deleteOne({
       user: userObjectId,
@@ -548,8 +564,7 @@ export class FriendsService {
   async createDefaultCategoryForUser(
     userId: string | Types.ObjectId,
   ): Promise<FriendCategoryDocument> {
-    const userObjectId =
-      typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
+    const userObjectId = transformObjectId(userId);
     let defaultCategory = await this.friendCategoryModel.findOne({
       user: userObjectId,
       isDefault: true,
@@ -593,10 +608,10 @@ export class FriendsService {
 
   // 创建新的好友分类
   async createFriendCategory(
-    userId: string,
+    userId: string | Types.ObjectId,
     categoryName: string,
   ): Promise<FriendCategoryDocument> {
-    const userObjectId = new Types.ObjectId(userId);
+    const userObjectId = transformObjectId(userId);
     const trimmedName = categoryName.trim();
     if (!trimmedName) {
       throw new BadRequestException('分类名称不能为空');
@@ -622,8 +637,10 @@ export class FriendsService {
   }
 
   // 获取用户好友的所有分类
-  async getFriendCategories(userId: string): Promise<FriendCategoryDocument[]> {
-    const userObjectId = new Types.ObjectId(userId);
+  async getFriendCategories(
+    userId: string | Types.ObjectId,
+  ): Promise<FriendCategoryDocument[]> {
+    const userObjectId = transformObjectId(userId);
     return this.friendCategoryModel
       .find({ user: userObjectId })
       .sort({ isDefault: -1, createdAt: 1 })
@@ -632,10 +649,10 @@ export class FriendsService {
 
   // 按分类获取好友（返回的数据格式利于前端按照分类进行手风琴风格的展示）
   async getFriendsByCategory(
-    userId: string,
+    userId: string | Types.ObjectId,
   ): Promise<CategorizedFriendsGroup[]> {
     this.logger.debug(`User [${userId}] - Fetching friends by category.`);
-    const userObjectId = new Types.ObjectId(userId);
+    const userObjectId = transformObjectId(userId);
     // 1. 获取用户的所有分类
     // Assuming FriendCategory lean objects are (FriendCategory & { _id: Types.ObjectId })
     const categories = await this.friendCategoryModel
@@ -740,12 +757,12 @@ export class FriendsService {
 
   // 修改好友分类名称
   async updateFriendCategoryName(
-    userId: string,
-    categoryId: string,
+    userId: string | Types.ObjectId,
+    categoryId: string | Types.ObjectId,
     newName: string,
   ): Promise<FriendCategoryDocument> {
-    const userObjectId = new Types.ObjectId(userId);
-    const categoryObjectId = new Types.ObjectId(categoryId);
+    const userObjectId = transformObjectId(userId);
+    const categoryObjectId = transformObjectId(categoryId);
 
     const category = await this.friendCategoryModel.findOne({
       _id: categoryObjectId,
@@ -781,11 +798,11 @@ export class FriendsService {
 
   // 删除好友分类
   async deleteFriendCategory(
-    userId: string,
+    userId: string | Types.ObjectId,
     categoryId: string,
   ): Promise<{ success: boolean; message: string }> {
-    const userObjectId = new Types.ObjectId(userId);
-    const categoryObjectId = new Types.ObjectId(categoryId);
+    const userObjectId = transformObjectId(userId);
+    const categoryObjectId = transformObjectId(categoryId);
     // 1. 验证分类是否存在且属于该用户
     const category = await this.friendCategoryModel.findOne({
       _id: categoryObjectId,
@@ -842,12 +859,12 @@ export class FriendsService {
 
   // 修改好友所属分类
   async updateFriendCategory(
-    userId: string,
-    friendId: string,
+    userId: string | Types.ObjectId,
+    friendId: string | Types.ObjectId,
     newCategoryId: string | null, // 接收 categoryId，可以为 null 表示移至未分类
   ): Promise<FriendRelationDocument> {
-    const userObjectId = new Types.ObjectId(userId);
-    const friendObjectId = new Types.ObjectId(friendId);
+    const userObjectId = transformObjectId(userId);
+    const friendObjectId = transformObjectId(friendId);
 
     const relation = await this.friendRelationModel.findOne({
       user: userObjectId,
@@ -891,11 +908,11 @@ export class FriendsService {
 
   // 获取单个好友关系的详细信息
   async getFriendRelationDetails(
-    userId: string, // 当前登录用户的 ID
-    relationId: string, // 好友关系文档的 _id
+    userId: string | Types.ObjectId, // 当前登录用户的 ID
+    relationId: string | Types.ObjectId, // 好友关系文档的 _id
   ): Promise<LeanPopulatedFriendRelation | null> {
-    const userObjectId = new Types.ObjectId(userId);
-    const relationObjectId = new Types.ObjectId(relationId);
+    const userObjectId = transformObjectId(userId);
+    const relationObjectId = transformObjectId(relationId);
     // 返回 FriendRelationDocument 类型
     const relation = (await this.friendRelationModel
       .findOne({

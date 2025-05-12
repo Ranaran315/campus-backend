@@ -39,7 +39,7 @@ export class UsersController {
     // JwtAuthGuard 会将解码后的用户信息附加到 req.user
     // JwtStrategy 中的 validate 方法决定了 req.user 的内容
     // 根据你的 JwtStrategy，req.user 包含 { userId, username, roles }
-    const userId = req.user.userId;
+    const userId = req.user._id;
     // 调用 findOne 获取完整的用户信息（不含密码）
     return this.usersService.findOneById(userId);
   }
@@ -91,7 +91,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @Patch('me/profile')
   updateProfile(@Request() req, @Body() updateProfileDto: UpdateProfileDto) {
-    const userId = req.user.userId;
+    const userId = req.user._id;
     return this.usersService.updateProfile(userId, updateProfileDto);
   }
 
@@ -102,7 +102,7 @@ export class UsersController {
     @Request() req,
     @Body() changePasswordDto: ChangePasswordDto,
   ) {
-    const userId = req.user.userId;
+    const userId = req.user._id;
     await this.usersService.changePassword(userId, changePasswordDto);
     // 成功时不一定需要返回数据，可以返回成功消息或状态码
     return { message: '密码修改成功。' };

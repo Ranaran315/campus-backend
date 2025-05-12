@@ -20,6 +20,7 @@ import {
 import * as bcrypt from 'bcrypt'; // 导入 bcrypt 用于密码哈希
 import { FriendsService } from 'src/friends/friends.service';
 import { RoleService } from 'src/role/role.service';
+import { transformObjectId } from 'src/utils/transform';
 
 @Injectable()
 export class UsersService {
@@ -158,14 +159,14 @@ export class UsersService {
   }
 
   // --- 查询所有用户 (READ ALL) ---
-  async findAll(): Promise<Omit<User, 'password'>[]> {
+  async findAll(): Promise<UserDocument[]> {
     // .select('-password') 表示从结果中排除 password 字段
     return this.userModel.find().select('-password').exec(); // .exec() 返回 Promise
   }
 
   // --- 根据 ID 查询单个用户 (READ ONE) ---
   async findOneById(
-    id: string,
+    id: string | Types.ObjectId,
     populateRoles: boolean = false,
   ): Promise<UserDocument | null> {
     const query = this.userModel.findById(id);
@@ -195,7 +196,7 @@ export class UsersService {
 
   // --- 更新用户信息 （管理员） ---
   async update(
-    id: string,
+    id: string | Types.ObjectId,
     updateUserDto: UpdateUserDto,
   ): Promise<Omit<User, 'password'>> {
     // 查找并更新用户，{ new: true } 会返回更新后的文档
@@ -216,7 +217,7 @@ export class UsersService {
 
   // --- 更新用户信息 （个人） ---
   async updateProfile(
-    userId: string,
+    userId: string | Types.ObjectId,
     updateProfileDto: UpdateProfileDto,
   ): Promise<Omit<User, 'password'>> {
     // 检查 email 和 phone 是否与其他用户冲突 (如果它们被更改)
@@ -270,7 +271,7 @@ export class UsersService {
 
   // --- 更新用户密码 ---
   async changePassword(
-    userId: string,
+    userId: string | Types.ObjectId,
     changePasswordDto: ChangePasswordDto,
   ): Promise<void> {
     // 1. 查找用户 (需要包含密码以进行比较)
@@ -300,7 +301,7 @@ export class UsersService {
   }
 
   // --- 删除用户 (DELETE) ---
-  async remove(id: string): Promise<void> {
+  async remove(id: string | Types.ObjectId): Promise<void> {
     // 可以返回 void 或被删除的用户信息
     const result = await this.userModel.findByIdAndDelete(id).exec();
     if (!result) {
@@ -337,7 +338,7 @@ export class UsersService {
 
   // --- 添加角色到用户 ---
   async addRoleToUser(
-    userId: string,
+    userId: string | Types.ObjectId,
     roleIdString: string,
   ): Promise<UserDocument | null> {
     if (
@@ -352,7 +353,7 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${userId} not found.`);
     }
 
-    const roleId = new Types.ObjectId(roleIdString);
+    const roleId = transformObjectId(roleIdString);
 
     // Check if the role is already assigned
     const roleAlreadyAssigned = user.roles.some((assignedRoleId) =>
@@ -373,7 +374,7 @@ export class UsersService {
 
   // --- 移除用户的角色信息 ---
   async removeRoleFromUser(
-    userId: string,
+    userId: string | Types.ObjectId,
     roleIdString: string,
   ): Promise<UserDocument | null> {
     if (
