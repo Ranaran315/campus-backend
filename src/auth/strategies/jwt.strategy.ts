@@ -1,5 +1,5 @@
 // src/auth/strategies/jwt.strategy.ts
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -19,10 +19,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
+  private readonly logger = new Logger(JwtStrategy.name);
+
   async validate(payload: any): Promise<UserDocument> {
     // payload 是解码后的 JWT 内容 { username, sub, roles, iat, exp }
     // 这里决定 request.user 附加什么信息
     // 可以只返回必要信息，减少数据库查询（如果不需要实时数据）
+
+    this.logger.debug('JWT payload:', payload);
 
     const user = await this.usersService.findOneById(payload.sub);
     if (!user) {

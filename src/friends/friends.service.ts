@@ -634,6 +634,7 @@ export class FriendsService {
   async getFriendsByCategory(
     userId: string,
   ): Promise<CategorizedFriendsGroup[]> {
+    this.logger.debug(`User [${userId}] - Fetching friends by category.`);
     const userObjectId = new Types.ObjectId(userId);
     // 1. 获取用户的所有分类
     // Assuming FriendCategory lean objects are (FriendCategory & { _id: Types.ObjectId })

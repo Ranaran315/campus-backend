@@ -4,6 +4,7 @@ import { UsersService } from './users.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from './user.schema';
 import { FriendsModule } from 'src/friends/friends.module';
+import { RoleModule } from 'src/role/role.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { FriendsModule } from 'src/friends/friends.module';
       },
     ]),
     forwardRef(() => FriendsModule),
+    RoleModule
   ],
   controllers: [UsersController],
   providers: [UsersService],
