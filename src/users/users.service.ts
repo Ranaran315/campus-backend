@@ -9,7 +9,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { User, UserDocument } from './user.schema'; // 导入 Schema 和 文档类型
 import { CreateUserDto } from './dto/create-user.dto';
 import {
@@ -19,6 +19,7 @@ import {
 } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt'; // 导入 bcrypt 用于密码哈希
 import { FriendsService } from 'src/friends/friends.service';
+import { RoleService } from 'src/role/role.service';
 
 @Injectable()
 export class UsersService {
@@ -27,6 +28,7 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @Inject(forwardRef(() => FriendsService)) // <--- 使用 @Inject 和 forwardRef 注入 FriendsService
     private readonly friendsService: FriendsService,
+    private readonly roleService: RoleService, // 角色服务
   ) {}
 
   // --- 创建用户 (CREATE) ---
@@ -90,14 +92,44 @@ export class UsersService {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // 4. 设置默认角色 (可以根据 userType 设定)
-    const defaultRoles = userType === 'student' ? ['student'] : ['staff']; // 示例
+    let defaultRoleIds: Types.ObjectId[] = [];
+    const defaultRoleName = userType === 'student' ? 'student' : 'staff';
+    try {
+      const roleDoc = await this.roleService.findByName(defaultRoleName);
+      if (roleDoc) {
+        defaultRoleIds.push(roleDoc._id as unknown as Types.ObjectId);
+      } else {
+        // 处理默认角色不存在的情况
+        // 可以选择抛出错误，或者记录日志并继续（用户将没有默认角色）
+        console.warn(
+          `Default role '${defaultRoleName}' not found. User will be created without this default role.`,
+        );
+        // throw new InternalServerErrorException(`Default role '${defaultRoleName}' configuration missing.`);
+      }
+    } catch (error) {
+      // 如果 findByName 抛出 NotFoundException，也意味着角色不存在
+      if (error instanceof NotFoundException) {
+        console.warn(
+          `Default role '${defaultRoleName}' not found via findByName. User will be created without this default role.`,
+        );
+      } else {
+        // 其他可能的错误，例如数据库连接问题
+        console.error(
+          `Error fetching default role '${defaultRoleName}':`,
+          error,
+        );
+        throw new InternalServerErrorException(
+          'Failed to fetch default role information.',
+        );
+      }
+    }
 
     // 5. 准备要保存的数据
     const userToCreatePayload: Partial<User> = {
       username: username,
       password: hashedPassword,
       userType: userType,
-      roles: defaultRoles, // 使用默认角色
+      roles: defaultRoleIds, // 使用默认角色
       ...specificIdField,
       realname: userData.realname,
       nickname: userData.nickname,
@@ -132,8 +164,20 @@ export class UsersService {
   }
 
   // --- 根据 ID 查询单个用户 (READ ONE) ---
-  async findOne(id: string): Promise<Omit<User, 'password'>> {
-    const user = await this.userModel.findById(id).select('-password').exec();
+  async findOneById(
+    id: string,
+    populateRoles: boolean = false,
+  ): Promise<UserDocument | null> {
+    const query = this.userModel.findById(id);
+    if (populateRoles) {
+      query.populate({
+        path: 'roles',
+        model: 'Role', // 确保这里的 model 名称与 RoleSchema 注册时一致
+        // 如果 RoleSchema 中的 permissions 也需要被间接使用或检查，可以考虑进一步 populate
+        // populate: { path: 'permissions' } // 但通常权限字符串列表足够
+      });
+    }
+    const user = await query.select('-password').exec(); // 排除密码字段
     if (!user) {
       // 如果找不到用户，抛出 404 Not Found 异常
       throw new NotFoundException(`ID 为 '${id}' 的用户不存在。`);
@@ -289,5 +333,75 @@ export class UsersService {
       .select('username nickname avatar realname userType')
       .limit(10)
       .lean();
+  }
+
+  // --- 添加角色到用户 ---
+  async addRoleToUser(
+    userId: string,
+    roleIdString: string,
+  ): Promise<UserDocument | null> {
+    if (
+      !Types.ObjectId.isValid(userId) ||
+      !Types.ObjectId.isValid(roleIdString)
+    ) {
+      throw new BadRequestException('Invalid User ID or Role ID format.');
+    }
+
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found.`);
+    }
+
+    const roleId = new Types.ObjectId(roleIdString);
+
+    // Check if the role is already assigned
+    const roleAlreadyAssigned = user.roles.some((assignedRoleId) =>
+      assignedRoleId.equals(roleId),
+    );
+    if (roleAlreadyAssigned) {
+      // You might want to throw a ConflictException or just return the user
+      // For now, let's throw a BadRequestException
+      throw new BadRequestException(
+        `Role with ID ${roleIdString} is already assigned to user ${userId}.`,
+      );
+    }
+
+    user.roles.push(roleId);
+    await user.save();
+    return this.findOneById(userId, true); // Return user with populated roles
+  }
+
+  // --- 移除用户的角色信息 ---
+  async removeRoleFromUser(
+    userId: string,
+    roleIdString: string,
+  ): Promise<UserDocument | null> {
+    if (
+      !Types.ObjectId.isValid(userId) ||
+      !Types.ObjectId.isValid(roleIdString)
+    ) {
+      throw new BadRequestException('Invalid User ID or Role ID format.');
+    }
+
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found.`);
+    }
+
+    const roleIdToRemove = new Types.ObjectId(roleIdString);
+
+    const initialRolesCount = user.roles.length;
+    user.roles = user.roles.filter(
+      (assignedRoleId) => !assignedRoleId.equals(roleIdToRemove),
+    );
+
+    if (user.roles.length === initialRolesCount) {
+      throw new NotFoundException(
+        `Role with ID ${roleIdString} was not assigned to user ${userId}, or already removed.`,
+      );
+    }
+
+    await user.save();
+    return this.findOneById(userId, true); // Return user with populated roles
   }
 }

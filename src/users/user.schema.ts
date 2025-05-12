@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
+import { Role } from '../role/role.schema'; // 引入 Role
 
 export type UserDocument = HydratedDocument<User>;
 
@@ -29,8 +30,8 @@ export class User {
   studentId?: string; // 学号（学生特有）
   @Prop({ unique: true, sparse: true }) // unique but can be null
   staffId?: string; // 工号（教职工特有）
-  @Prop({ type: [String], default: [] })
-  roles: string[]; // 角色
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Role' }], default: [] })
+  roles: Types.ObjectId[]; // 角色
   @Prop({ type: Object })
   departmentInfo: {
     // 学院信息

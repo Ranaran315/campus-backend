@@ -57,7 +57,10 @@ export interface LeanPopulatedFriendRelation {
 
 export interface AlphabeticallyGroupedFriends {
   letter: string;
-  friends: (LeanPopulatedFriendRelation & { displayName: string; sortLetter: string })[];
+  friends: (LeanPopulatedFriendRelation & {
+    displayName: string;
+    sortLetter: string;
+  })[];
 }
 
 // The type for elements of the 'result' array in getFriendsByCategory
@@ -83,7 +86,7 @@ export class FriendsService {
     private friendCategoryModel: Model<FriendCategoryDocument>, // 新增
     private notificationsGateway: NotificationsGateway,
     @Inject(forwardRef(() => UsersService))
-    private readonly usersService: UsersService , // 注入UsersService
+    private readonly usersService: UsersService, // 注入UsersService
   ) {}
 
   private readonly logger = new Logger('FriendsService'); // 添加日志记录器
@@ -198,13 +201,18 @@ export class FriendsService {
     if (!str || str.length === 0) return '#';
 
     // 对中文字符获取拼音首字母
-     const pinyinResult = pinyin(str.charAt(0), {
+    const pinyinResult = pinyin(str.charAt(0), {
       style: pinyin.STYLE_FIRST_LETTER,
       heteronym: false,
     });
-    if (pinyinResult && pinyinResult.length > 0 && pinyinResult[0] && pinyinResult[0].length > 0) {
-        const firstPinyin = pinyinResult[0][0].toUpperCase();
-        if (/[A-Z]/.test(firstPinyin)) return firstPinyin;
+    if (
+      pinyinResult &&
+      pinyinResult.length > 0 &&
+      pinyinResult[0] &&
+      pinyinResult[0].length > 0
+    ) {
+      const firstPinyin = pinyinResult[0][0].toUpperCase();
+      if (/[A-Z]/.test(firstPinyin)) return firstPinyin;
     }
 
     const first = str.charAt(0).toUpperCase();
@@ -267,7 +275,7 @@ export class FriendsService {
 
     // 获取发送者信息并发送实时通知
     try {
-      const senderInfo = (await this.usersService.findOne(
+      const senderInfo = (await this.usersService.findOneById(
         senderId,
       )) as unknown as UserInfo;
 
@@ -399,8 +407,10 @@ export class FriendsService {
       const senderObjectId = request.sender as Types.ObjectId; // Already ObjectId from schema
       const receiverObjectId = handlerUserObjectId; // This is request.receiver as ObjectId
 
-      const receiverDefaultCategory = await this.createDefaultCategoryForUser(receiverObjectId);
-      const senderDefaultCategory = await this.createDefaultCategoryForUser(senderObjectId);
+      const receiverDefaultCategory =
+        await this.createDefaultCategoryForUser(receiverObjectId);
+      const senderDefaultCategory =
+        await this.createDefaultCategoryForUser(senderObjectId);
 
       // 创建正向关系 (user -> friend)
       await this.friendRelationModel.findOneAndUpdate(
@@ -422,7 +432,7 @@ export class FriendsService {
     // 发送请求状态更新通知
     try {
       const senderId = request.sender.toString();
-      const receiverInfo = (await this.usersService.findOne(
+      const receiverInfo = (await this.usersService.findOneById(
         userId,
       )) as unknown as UserInfo; // 处理请求的人
       if (receiverInfo) {
@@ -538,7 +548,8 @@ export class FriendsService {
   async createDefaultCategoryForUser(
     userId: string | Types.ObjectId,
   ): Promise<FriendCategoryDocument> {
-    const userObjectId = typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
+    const userObjectId =
+      typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
     let defaultCategory = await this.friendCategoryModel.findOne({
       user: userObjectId,
       isDefault: true,
@@ -552,7 +563,8 @@ export class FriendsService {
       user: userObjectId,
       name: INITIAL_DEFAULT_CATEGORY_NAME,
     });
-    if (existingNamedCategory) { // 不论 isDefault 是 true 还是 false
+    if (existingNamedCategory) {
+      // 不论 isDefault 是 true 还是 false
       if (!existingNamedCategory.isDefault) {
         this.logger.warn(
           `User ${userObjectId.toString()} has a category named "${INITIAL_DEFAULT_CATEGORY_NAME}" but it's not marked as default. Updating it to be default.`,
@@ -561,7 +573,9 @@ export class FriendsService {
         return await existingNamedCategory.save();
       }
       // 如果 existingNamedCategory.isDefault 已经是 true，但第一个查询没找到，这不应该发生，但为了安全返回它
-      this.logger.log(`Found existing default category "${INITIAL_DEFAULT_CATEGORY_NAME}" for user ${userObjectId.toString()} by name.`);
+      this.logger.log(
+        `Found existing default category "${INITIAL_DEFAULT_CATEGORY_NAME}" for user ${userObjectId.toString()} by name.`,
+      );
       return existingNamedCategory;
     }
 
@@ -625,7 +639,7 @@ export class FriendsService {
     // Assuming FriendCategory lean objects are (FriendCategory & { _id: Types.ObjectId })
     const categories = await this.friendCategoryModel
       .find({ user: userObjectId })
-      .sort({ isDefault:-1, name: 1 })
+      .sort({ isDefault: -1, name: 1 })
       .lean();
     this.logger.debug(
       `User [${userId}] - Fetched categories: ${JSON.stringify(categories.map((c) => ({ id: c._id, name: c.name })))}`,
@@ -634,7 +648,10 @@ export class FriendsService {
     // 2. 获取所有已接受的好友关系，并填充好友信息
     const relations = (await this.friendRelationModel
       .find({ user: userObjectId, status: 'accepted' })
-      .populate('friend', 'username nickname avatar onlineStatus lastOnlineTime')
+      .populate(
+        'friend',
+        'username nickname avatar onlineStatus lastOnlineTime',
+      )
       .lean()) as unknown as LeanPopulatedFriendRelation[]; // Explicitly cast to unknown before asserting
 
     const result: CategorizedFriendsGroup[] = [];
@@ -653,7 +670,7 @@ export class FriendsService {
         category: category._id.toString(), // category._id is Types.ObjectId
         categoryName: category.name,
         friends: friendsInCategory,
-        isDefault: category.isDefault
+        isDefault: category.isDefault,
       });
       this.logger.debug(
         `User [${userId}] - Added category to result: ${category.name}, Friends count: ${friendsInCategory.length}`,
@@ -807,7 +824,10 @@ export class FriendsService {
     );
 
     // 3. 删除该分类
-    await this.friendCategoryModel.deleteOne({ _id: categoryObjectId, user: userObjectId });
+    await this.friendCategoryModel.deleteOne({
+      _id: categoryObjectId,
+      user: userObjectId,
+    });
 
     this.logger.log(
       `User [${userId}] - Category [${category}] deleted successfully.`,
@@ -825,7 +845,6 @@ export class FriendsService {
     friendId: string,
     newCategoryId: string | null, // 接收 categoryId，可以为 null 表示移至未分类
   ): Promise<FriendRelationDocument> {
-
     const userObjectId = new Types.ObjectId(userId);
     const friendObjectId = new Types.ObjectId(friendId);
 
@@ -877,7 +896,7 @@ export class FriendsService {
     const userObjectId = new Types.ObjectId(userId);
     const relationObjectId = new Types.ObjectId(relationId);
     // 返回 FriendRelationDocument 类型
-    const relation = await this.friendRelationModel
+    const relation = (await this.friendRelationModel
       .findOne({
         _id: relationObjectId,
         user: userObjectId, // 确保这条好友关系属于当前用户
@@ -887,12 +906,19 @@ export class FriendsService {
         path: 'friend',
         select: '-password', // 选择需要返回的用户公开字段
       })
-      .populate<{ category: FriendCategoryDocument  & { _id: Types.ObjectId; isDefault?: boolean } | null }>({
+      .populate<{
+        category:
+          | (FriendCategoryDocument & {
+              _id: Types.ObjectId;
+              isDefault?: boolean;
+            })
+          | null;
+      }>({
         // 新增：填充 category
         path: 'category',
         select: 'name _id isDefault',
       })
-      .lean() as LeanPopulatedFriendRelation | null;; // 使用 lean() 以获得普通 JS 对象，如果不需要 Mongoose 文档方法
+      .lean()) as LeanPopulatedFriendRelation | null; // 使用 lean() 以获得普通 JS 对象，如果不需要 Mongoose 文档方法
 
     if (!relation) {
       throw new NotFoundException('好友关系不存在或不属于您');

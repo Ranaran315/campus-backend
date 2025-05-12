@@ -11,6 +11,8 @@ import { FriendsModule } from './friends/friends.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { RoleModule } from './role/role.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -20,15 +22,17 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       envFilePath: '.env',
     }),
     // --- MongoDB 模块 ---
-    MongooseModule.forRootAsync({ // 示例：Mongoose 也使用 ConfigService
+    MongooseModule.forRootAsync({
+      // 示例：Mongoose 也使用 ConfigService
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-          uri: configService.get<string>('MONGODB_URI'), // 假设 .env 有 MONGODB_URI
+        uri: configService.get<string>('MONGODB_URI'), // 假设 .env 有 MONGODB_URI
       }),
       inject: [ConfigService],
-  }),
-  // --- JWT 模块 ---
-    JwtModule.registerAsync({ // Or JwtModule.register if not using async/config
+    }),
+    // --- JWT 模块 ---
+    JwtModule.registerAsync({
+      // Or JwtModule.register if not using async/config
       imports: [ConfigModule], // Import ConfigModule if using ConfigService
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'), // Make sure JWT_SECRET is defined in your .env and loaded
@@ -43,6 +47,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     AuthModule,
     FriendsModule,
     NotificationsModule,
+    RoleModule,
+    AdminModule,
   ],
   controllers: [AppController, AuthController, FriendsController],
   providers: [AppService, AuthService],

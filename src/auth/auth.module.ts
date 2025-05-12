@@ -5,6 +5,8 @@ import { UsersModule } from '../users/users.module'; // 导入 UsersModule
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './strategies/jwt.strategy'; // 稍后创建
+import { RolesGuard } from './guards/roles.guard';
+import { PermissionsGuard } from './guards/permissions.guard';
 
 @Module({
   imports: [
@@ -15,8 +17,8 @@ import { JwtStrategy } from './strategies/jwt.strategy'; // 稍后创建
       signOptions: { expiresIn: '7d' }, // Token 有效期，例如 7 天
     }),
   ],
-  providers: [AuthService, JwtStrategy], // 注册 AuthService 和 JwtStrategy
+  providers: [AuthService, JwtStrategy, RolesGuard, PermissionsGuard], // 注册 AuthService 和 JwtStrategy
   controllers: [AuthController],
-  exports: [AuthService, PassportModule], // 导出 AuthService 和 Passport/JWT 模块供其他地方使用
+  exports: [AuthService, PassportModule, RolesGuard, PermissionsGuard], // 导出 AuthService 和 Passport/JWT 模块供其他地方使用
 })
 export class AuthModule {}

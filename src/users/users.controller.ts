@@ -16,7 +16,11 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { ChangePasswordDto, UpdateProfileDto, UpdateUserDto } from './dto/update-user.dto';
+import {
+  ChangePasswordDto,
+  UpdateProfileDto,
+  UpdateUserDto,
+} from './dto/update-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Types } from 'mongoose';
 
@@ -25,7 +29,7 @@ import { Types } from 'mongoose';
 
 @Controller('users') // 定义基础路由为 /users
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   // --- 获取当前登录用户的信息 ---
   // GET /users/me
@@ -37,7 +41,7 @@ export class UsersController {
     // 根据你的 JwtStrategy，req.user 包含 { userId, username, roles }
     const userId = req.user.userId;
     // 调用 findOne 获取完整的用户信息（不含密码）
-    return this.usersService.findOne(userId);
+    return this.usersService.findOneById(userId);
   }
 
   // --- 创建用户 ---
@@ -72,7 +76,7 @@ export class UsersController {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException('无效的用户ID格式');
     }
-    return this.usersService.findOne(id);
+    return this.usersService.findOneById(id);
   }
 
   // --- 更新用户 ---
@@ -94,7 +98,10 @@ export class UsersController {
   // --- 修改当前用户的密码 ---
   @UseGuards(JwtAuthGuard)
   @Patch('me/password')
-  async changePassword(@Request() req, @Body() changePasswordDto: ChangePasswordDto) {
+  async changePassword(
+    @Request() req,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
     const userId = req.user.userId;
     await this.usersService.changePassword(userId, changePasswordDto);
     // 成功时不一定需要返回数据，可以返回成功消息或状态码
