@@ -1,0 +1,53 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { College, CollegeDocument } from './schemas/college.schema';
+import { CreateCollegeDto } from './dto/create-college.dto';
+import { UpdateCollegeDto } from './dto/update-college.dto';
+
+@Injectable()
+export class CollegeService {
+  constructor(
+    @InjectModel(College.name) private collegeModel: Model<CollegeDocument>,
+  ) {}
+
+  async create(createCollegeDto: CreateCollegeDto): Promise<College> {
+    const createdCollege = new this.collegeModel(createCollegeDto);
+    return createdCollege.save();
+  }
+
+  async findAll(): Promise<College[]> {
+    return this.collegeModel.find().exec();
+  }
+
+  async findOne(id: string): Promise<College> {
+    const college = await this.collegeModel.findById(id).exec();
+    if (!college) {
+      throw new NotFoundException(`College with ID "${id}" not found`);
+    }
+    return college;
+  }
+
+  async update(
+    id: string,
+    updateCollegeDto: UpdateCollegeDto,
+  ): Promise<College> {
+    const existingCollege = await this.collegeModel
+      .findByIdAndUpdate(id, updateCollegeDto, { new: true })
+      .exec();
+    if (!existingCollege) {
+      throw new NotFoundException(`College with ID "${id}" not found`);
+    }
+    return existingCollege;
+  }
+
+  async remove(id: string): Promise<{ deleted: boolean; message?: string }> {
+    // TODO: Add logic to check if there are Majors associated with this College before deletion
+    // For now, direct delete:
+    const result = await this.collegeModel.deleteOne({ _id: id }).exec();
+    if (result.deletedCount === 0) {
+      throw new NotFoundException(`College with ID "${id}" not found`);
+    }
+    return { deleted: true };
+  }
+}

@@ -13,6 +13,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RoleModule } from './role/role.module';
 import { AdminModule } from './admin/admin.module';
+import { CollegeModule } from './college/college.module';
+import { MajorModule } from './major/major.module';
+import { AcademicClassModule } from './academic-class/academic-class.module';
 
 @Module({
   imports: [
@@ -49,6 +52,9 @@ import { AdminModule } from './admin/admin.module';
     NotificationsModule,
     RoleModule,
     AdminModule,
+    CollegeModule,
+    MajorModule,
+    AcademicClassModule,
   ],
   controllers: [AppController, AuthController, FriendsController],
   providers: [AppService, AuthService],
