@@ -4,6 +4,13 @@ import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 
+interface PopulatedRole {
+  _id: any; // or string, or mongoose.Types.ObjectId
+  name: string;
+  permissions: string[];
+  // other properties if any
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -23,10 +30,27 @@ export class AuthService {
   }
 
   async login(user: any) {
+
+    const roleNames: string[] = [];
+    const permissionSet = new Set<string>();
+
+    if (user.roles && Array.isArray(user.roles)) {
+      user.roles.forEach((role: PopulatedRole) => {
+        if (role && role.name) {
+          roleNames.push(role.name);
+        }
+        if (role && Array.isArray(role.permissions)) {
+          role.permissions.forEach(permission => permissionSet.add(permission));
+        }
+      });
+    }
+    const uniquePermissions = Array.from(permissionSet);
+
     const payload = {
       username: user.username,
       sub: user._id,
-      roles: user.roles,
+      roles: roleNames,
+      permissions: uniquePermissions
     };
 
     const returnUser = {
@@ -34,9 +58,13 @@ export class AuthService {
       username: user.username,
       nickname: user.nickname,
       avatar: user.avatar ?? '',
+      roles: roleNames,
+      permissions: uniquePermissions,
     };
 
     this.logger.log(`User ${user.username} logged in successfully.`); // 记录登录成功的日志
+    this.logger.debug(`JWT Payload: ${JSON.stringify(payload)}`);
+    this.logger.debug(`Return UserInfo: ${JSON.stringify(returnUser)}`);
 
     this.logger.debug(`Return UserInfo: ${returnUser.avatar}`);
 

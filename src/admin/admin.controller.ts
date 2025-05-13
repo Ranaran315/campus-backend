@@ -16,7 +16,7 @@ import { RoleService } from '../role/role.service';
 import { Types } from 'mongoose';
 import { AssignRoleDto } from './dto/assign-role.dto';
 
-@Controller('admin') // Base path for admin user operations
+@Controller('admin/users') // Base path for admin user operations
 // @UseGuards(AdminGuard) // Placeholder for a future AdminGuard
 export class AdminController {
   constructor(
@@ -24,8 +24,8 @@ export class AdminController {
     private readonly roleService: RoleService,
   ) {}
 
-  // Endpoint to assign a role to a user
-  @Post(':userId/roles')
+  // 分配角色给用户的端点
+  @Post(':userId/assign-role') // 修改方法路径
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   @HttpCode(HttpStatus.OK)
   // @Roles('SuperAdmin', 'Admin') // Placeholder for specific admin role checks
@@ -64,7 +64,7 @@ export class AdminController {
   }
 
   // Endpoint to remove a role from a user
-  @Delete(':userId/roles/:roleId')
+  @Delete(':userId/unassign-role/:roleId') 
   @HttpCode(HttpStatus.OK) // Or HttpStatus.NO_CONTENT if no body is returned
   // @Roles('SuperAdmin', 'Admin')
   async removeRoleFromUser(

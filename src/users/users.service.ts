@@ -7,6 +7,7 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -31,6 +32,8 @@ export class UsersService {
     private readonly friendsService: FriendsService,
     private readonly roleService: RoleService, // 角色服务
   ) {}
+
+  private readonly logger = new Logger(UsersService.name); // 添加日志记录器
 
   // --- 创建用户 (CREATE) ---
   async create(createUserDto: CreateUserDto): Promise<Omit<User, 'password'>> {
@@ -191,7 +194,15 @@ export class UsersService {
     username: string,
   ): Promise<UserDocument | null> {
     // 注意：这个方法返回包含密码的完整文档，仅用于内部认证逻辑
-    return this.userModel.findOne({ username }).exec();
+     return this.userModel
+      .findOne({ username })
+      .populate({
+        path: 'roles',
+        model: 'Role', // 确保这里的 model 名称与 RoleSchema 注册时一致
+        // 如果 RoleSchema 中的 permissions 字段本身也是一个引用需要进一步 populate，
+        // 但根据 role.schema.ts，permissions 是 string[]，所以单层 populate('roles') 应该足够
+      })
+      .exec();
   }
 
   // --- 更新用户信息 （管理员） ---
