@@ -383,7 +383,7 @@ export class FriendsService {
 
     // 确保只有接收者可以处理请求
     // 将 ObjectId 转换为字符串进行比较，或者使用 .equals() 方法
-    if (request.receiver.toString() !== userId) {
+    if (request.receiver.toString() !== handlerUserObjectId.toString()) {
       // 使用 .equals() 并确保 request.receiver 是 ObjectId
       this.logger.warn(
         `权限检查失败: handlerUserObjectId (${handlerUserObjectId.toString()}) 与 request.receiver (${(request.receiver as Types.ObjectId).toString()}) 不匹配。`,

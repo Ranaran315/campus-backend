@@ -22,6 +22,7 @@ import { UpdateRoleDto } from './dto/update-role.dto';
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}
 
+  // 创建角色
   @Post()
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   // @Roles('SuperAdmin', 'Admin') // 示例：只有特定角色的用户才能创建
@@ -29,18 +30,21 @@ export class RoleController {
     return this.roleService.create(createRoleDto);
   }
 
+  // 获取所有角色
   @Get()
   // @Roles('SuperAdmin', 'Admin', 'DepartmentAdmin') // 示例：更多角色可以查看列表
   findAll() {
     return this.roleService.findAll();
   }
 
+  // 获取单个角色
   @Get(':id')
   // @Roles('SuperAdmin', 'Admin', 'DepartmentAdmin')
   findOne(@Param('id') id: string) {
     return this.roleService.findOne(id);
   }
 
+  // 更新角色
   @Patch(':id')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   // @Roles('SuperAdmin', 'Admin')
@@ -48,6 +52,7 @@ export class RoleController {
     return this.roleService.update(id, updateRoleDto);
   }
 
+  // 删除角色
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT) // 成功删除通常返回 204 No Content
   // @Roles('SuperAdmin') // 示例：只有超级管理员才能删除
@@ -62,7 +67,6 @@ export class RoleController {
 
   // --- 权限点分配给角色的特定接口 (可选) ---
   // 如果你希望有更细粒度的接口来管理单个权限，而不是通过整个 UpdateRoleDto
-
   @Patch(':id/permissions/add')
   // @Roles('SuperAdmin', 'Admin')
   addPermission(
@@ -74,7 +78,8 @@ export class RoleController {
     }
     return this.roleService.addPermissionToRole(roleId, permission);
   }
-
+  
+  // 从角色中移除权限
   @Patch(':id/permissions/remove')
   // @Roles('SuperAdmin', 'Admin')
   removePermission(
