@@ -22,6 +22,9 @@ import * as bcrypt from 'bcrypt'; // 导入 bcrypt 用于密码哈希
 import { FriendsService } from 'src/friends/friends.service';
 import { RoleService } from 'src/role/role.service';
 import { transformObjectId } from 'src/utils/transform';
+import { CollegeService } from 'src/college/college.service';
+import { AcademicClassService } from 'src/academic-class/academic-class.service';
+import { MajorService } from 'src/major/major.service';
 
 @Injectable()
 export class UsersService {
@@ -31,32 +34,107 @@ export class UsersService {
     @Inject(forwardRef(() => FriendsService)) // <--- 使用 @Inject 和 forwardRef 注入 FriendsService
     private readonly friendsService: FriendsService,
     private readonly roleService: RoleService, // 角色服务
+    private readonly collegeService: CollegeService, // 新增
+    private readonly majorService: MajorService, // 新增
+    private readonly academicClassService: AcademicClassService, // 新增
   ) {}
 
   private readonly logger = new Logger(UsersService.name); // 添加日志记录器
 
   // --- 创建用户 (CREATE) ---
   async create(createUserDto: CreateUserDto): Promise<Omit<User, 'password'>> {
-    const { identifier, userType, password, ...userData } = createUserDto;
+    const {
+      identifier,
+      userType,
+      password,
+      collegeId,
+      majorId,
+      academicClassId,
+      staffInfo: staffInfoDto,
+      ...userData
+    } = createUserDto;
 
     // 1. 根据 userType 确定 username, studentId/staffId
     const username = identifier; // 使用学号/工号作为用户名
     let specificIdField = {} as { studentId?: string; staffId?: string };
+
+    // 验证学院 ID
+    const collegeObjectId = transformObjectId(collegeId);
+    const collegeDoc = await this.collegeService.findOne(collegeObjectId);
+    if (!collegeDoc) {
+      throw new BadRequestException(`学院 ID '${collegeId}' 不存在。`);
+    }
+
+    // 验证班级 ID
+    let majorObjectId: Types.ObjectId | undefined;
+    if (majorId) {
+      majorObjectId = transformObjectId(majorId);
+      const majorDoc = await this.majorService.findOne(majorObjectId);
+      if (!majorDoc) {
+        throw new BadRequestException(`专业 ID '${majorId}' 不存在。`);
+      }
+      // 验证专业是否属于指定的学院
+      if (
+        !majorDoc.college ||
+        // @ts-ignore
+        !(majorDoc.college._id instanceof Types.ObjectId) ||
+        // @ts-ignore
+        !majorDoc.college._id.equals(collegeObjectId)
+      ) {
+        throw new BadRequestException(
+          `专业 '${majorDoc.name}' 不属于学院 '${collegeDoc.name}'。`,
+        );
+      }
+    }
+
+    // 验证班级
+    let academicClassObjectId: Types.ObjectId | undefined;
+    if (userType === 'student' && academicClassId) {
+      academicClassObjectId = transformObjectId(academicClassId);
+      const academicClassDoc = await this.academicClassService.findOne(
+        academicClassObjectId,
+      );
+      if (!academicClassDoc) {
+        throw new BadRequestException(`班级 ID '${academicClassId}' 不存在。`);
+      }
+      // 验证班级是否属于指定的专业和学院
+      if (
+        (majorObjectId && !academicClassDoc.major) ||
+        // @ts-ignore
+        !(academicClassDoc.major._id instanceof Types.ObjectId) ||
+        // @ts-ignore
+        !academicClassDoc.major._id.equals(majorObjectId)
+      ) {
+        throw new BadRequestException(
+          `班级 '${academicClassDoc.name}' 不属于指定的专业。`,
+        );
+      }
+      if (
+        !academicClassDoc.college ||
+        // @ts-ignore
+        !(academicClassDoc.college._id instanceof Types.ObjectId) ||
+        // @ts-ignore
+        !academicClassDoc.college._id.equals(collegeObjectId)
+      ) {
+        throw new BadRequestException(
+          `班级 '${academicClassDoc.name}' 不属于指定的学院。`,
+        );
+      }
+    } else if (userType === 'student' && !academicClassId) {
+      // 根据业务需求，学生是否必须有关联班级
+      throw new BadRequestException(
+        '学生用户必须提供班级信息 (academicClassId)。',
+      );
+    }
+
     if (userType === 'student') {
       specificIdField = { studentId: identifier };
-      if (!userData.classInfo) {
-        throw new BadRequestException('学生用户必须提供班级信息 (classInfo)。');
-      }
+      // 移除旧的 classInfo 检查: if (!userData.classInfo)
     } else if (userType === 'staff') {
       specificIdField = { staffId: identifier };
-      if (!userData.staffInfo) {
-        // 可以根据需要决定 staffInfo 是否强制要求
-        // throw new BadRequestException('教职工用户必须提供教职工信息 (staffInfo)。');
-        // 或者允许为空对象
-        userData.staffInfo = userData.staffInfo || {};
-      }
+      // 移除旧的 staffInfo 检查: if (!userData.staffInfo)
     } else {
-      throw new BadRequestException('无效的用户类型。'); // 理论上 DTO 已校验，但增加保险
+      throw new BadRequestException('无效的用户类型。');
     }
 
     // 2. 检查关键信息是否重复
@@ -133,18 +211,66 @@ export class UsersService {
       username: username,
       password: hashedPassword,
       userType: userType,
-      roles: defaultRoleIds, // 使用默认角色
+      roles: defaultRoleIds,
       ...specificIdField,
       realname: userData.realname,
       nickname: userData.nickname,
       gender: userData.gender,
-      departmentInfo: userData.departmentInfo,
-      classInfo: userType === 'student' ? userData.classInfo : undefined, // 只为学生保存班级信息
-      staffInfo: userType === 'staff' ? userData.staffInfo : undefined, // 只为教职工保存教职工信息
       phone: userData.phone,
       email: userData.email,
-      status: 'active', // 默认状态为 active
+      status: 'active',
+      college: collegeObjectId, // 使用验证过的 ObjectId
+      major: majorObjectId, // 使用验证过的 ObjectId (如果存在)
     };
+
+    if (userType === 'student' && academicClassObjectId) {
+      userToCreatePayload.academicClass = academicClassObjectId;
+    }
+
+    if (userType === 'staff' && staffInfoDto) {
+      userToCreatePayload.staffInfo = {
+        officeLocation: staffInfoDto.officeLocation,
+        title: staffInfoDto.title,
+      };
+      if (staffInfoDto.departmentId) {
+        const staffDeptObjectId = transformObjectId(staffInfoDto.departmentId);
+        const staffDeptCollege =
+          await this.collegeService.findOne(staffDeptObjectId);
+        if (!staffDeptCollege) {
+          throw new BadRequestException(
+            `教职工信息中的部门ID '${staffInfoDto.departmentId}' 不存在。`,
+          );
+        }
+        // 确保教职工的部门与用户的主要学院信息一致（如果业务要求如此）
+        // if (!staffDeptObjectId.equals(collegeObjectId)) {
+        //   throw new BadRequestException(`教职工的所属部门必须与其主要学院信息一致。`);
+        // }
+        userToCreatePayload.staffInfo.department = staffDeptObjectId;
+      }
+      if (
+        staffInfoDto.managedClassIds &&
+        staffInfoDto.managedClassIds.length > 0
+      ) {
+        userToCreatePayload.staffInfo.managedClasses = [];
+        for (const classId of staffInfoDto.managedClassIds) {
+          const managedClassObjectId = transformObjectId(classId);
+          const managedClassDoc =
+            await this.academicClassService.findOne(managedClassObjectId);
+          if (!managedClassDoc) {
+            throw new BadRequestException(
+              `教职工管理的班级ID '${classId}' 不存在。`,
+            );
+          }
+          // 可选：验证管理的班级是否属于该教职工所在的学院
+          // if (!managedClassDoc.college || !transformObjectId(managedClassDoc.college as Types.ObjectId).equals(userToCreatePayload.staffInfo.department || collegeObjectId)) {
+          //   throw new BadRequestException(`教职工管理的班级 '${managedClassDoc.name}' 不属于教职工所在部门/学院。`);
+          // }
+          userToCreatePayload.staffInfo.managedClasses.push(
+            managedClassObjectId,
+          );
+        }
+      }
+    }
 
     // 6. 创建并保存用户
     const createdUser = new this.userModel(userToCreatePayload);
@@ -174,12 +300,13 @@ export class UsersService {
   ): Promise<UserDocument | null> {
     const query = this.userModel.findById(id);
     if (populateRoles) {
-      query.populate({
-        path: 'roles',
-        model: 'Role', // 确保这里的 model 名称与 RoleSchema 注册时一致
-        // 如果 RoleSchema 中的 permissions 也需要被间接使用或检查，可以考虑进一步 populate
-        // populate: { path: 'permissions' } // 但通常权限字符串列表足够
-      });
+      query
+        .populate({ path: 'roles', model: 'Role' })
+        .populate({ path: 'college', model: 'College' })
+        .populate({ path: 'major', model: 'Major' })
+        .populate({ path: 'academicClass', model: 'AcademicClass' })
+        .populate({ path: 'staffInfo.department', model: 'College' })
+        .populate({ path: 'staffInfo.managedClasses', model: 'AcademicClass' });
     }
     const user = await query.select('-password').exec(); // 排除密码字段
     if (!user) {
@@ -194,14 +321,14 @@ export class UsersService {
     username: string,
   ): Promise<UserDocument | null> {
     // 注意：这个方法返回包含密码的完整文档，仅用于内部认证逻辑
-     return this.userModel
+    return this.userModel
       .findOne({ username })
-      .populate({
-        path: 'roles',
-        model: 'Role', // 确保这里的 model 名称与 RoleSchema 注册时一致
-        // 如果 RoleSchema 中的 permissions 字段本身也是一个引用需要进一步 populate，
-        // 但根据 role.schema.ts，permissions 是 string[]，所以单层 populate('roles') 应该足够
-      })
+      .populate({ path: 'roles', model: 'Role' })
+      .populate({ path: 'college', model: 'College' })
+      .populate({ path: 'major', model: 'Major' })
+      .populate({ path: 'academicClass', model: 'AcademicClass' })
+      .populate({ path: 'staffInfo.department', model: 'College' })
+      .populate({ path: 'staffInfo.managedClasses', model: 'AcademicClass' })
       .exec();
   }
 
@@ -210,20 +337,196 @@ export class UsersService {
     id: string | Types.ObjectId,
     updateUserDto: UpdateUserDto,
   ): Promise<Omit<User, 'password'>> {
-    // 查找并更新用户，{ new: true } 会返回更新后的文档
+    const userObjectId = transformObjectId(id);
+    const userToUpdate = await this.userModel.findById(userObjectId);
+
+    if (!userToUpdate) {
+      throw new NotFoundException(`ID 为 '${id}' 的用户不存在。`);
+    }
+
+    const {
+      collegeId,
+      majorId,
+      academicClassId,
+      staffInfo: staffInfoDto,
+      password,
+      ...otherData
+    } = updateUserDto;
+    const updatePayload: Partial<User> = { ...otherData };
+
+    if (password) {
+      const saltRounds = 10;
+      updatePayload.password = await bcrypt.hash(password, saltRounds);
+    }
+
+    // 处理 collegeId 更新
+    if (collegeId !== undefined) {
+      // 允许设置为 null 来解除关联
+      if (collegeId === null) {
+        updatePayload.college = undefined; // 或者 null，取决于你的 schema 定义和业务逻辑
+        updatePayload.major = undefined; // 如果学院被移除，专业和班级也应被移除
+        updatePayload.academicClass = undefined;
+      } else {
+        const collegeObjectId = transformObjectId(collegeId);
+        const collegeDoc = await this.collegeService.findOne(collegeObjectId);
+        if (!collegeDoc)
+          throw new BadRequestException(`学院 ID '${collegeId}' 不存在。`);
+        updatePayload.college = collegeObjectId;
+        // 如果学院改变，需要重新验证或清除 major 和 academicClass
+        if (
+          userToUpdate.college &&
+          !userToUpdate.college.equals(collegeObjectId)
+        ) {
+          updatePayload.major = undefined;
+          updatePayload.academicClass = undefined;
+        }
+      }
+    }
+
+    // 处理 majorId 更新 (必须在 collegeId 处理之后)
+    if (majorId !== undefined) {
+      if (majorId === null) {
+        updatePayload.major = undefined;
+        updatePayload.academicClass = undefined; // 专业移除，班级也应移除
+      } else {
+        const currentCollegeId = updatePayload.college || userToUpdate.college;
+        if (!currentCollegeId)
+          throw new BadRequestException('更新专业前必须先指定学院。');
+        const majorObjectId = transformObjectId(majorId);
+        const majorDoc = await this.majorService.findOne(majorObjectId);
+        if (!majorDoc)
+          throw new BadRequestException(`专业 ID '${majorId}' 不存在。`);
+        if (
+          !majorDoc.college ||
+          // @ts-ignore
+          !(majorDoc.college._id instanceof Types.ObjectId) ||
+          // @ts-ignore
+          !majorDoc.college._id.equals(currentCollegeId)
+        ) {
+          throw new BadRequestException(
+            `专业 '${majorDoc.name}' 不属于当前指定的学院。`,
+          );
+        }
+        updatePayload.major = majorObjectId;
+        if (userToUpdate.major && !userToUpdate.major.equals(majorObjectId)) {
+          updatePayload.academicClass = undefined;
+        }
+      }
+    }
+
+    // 处理 academicClassId 更新 (必须在 majorId 和 collegeId 处理之后)
+    if (academicClassId !== undefined && userToUpdate.userType === 'student') {
+      if (academicClassId === null) {
+        updatePayload.academicClass = undefined;
+      } else {
+        const currentCollegeId = updatePayload.college || userToUpdate.college;
+        const currentMajorId = updatePayload.major || userToUpdate.major;
+        if (!currentCollegeId || !currentMajorId)
+          throw new BadRequestException('更新班级前必须先指定学院和专业。');
+
+        const academicClassObjectId = transformObjectId(academicClassId);
+        const academicClassDoc = await this.academicClassService.findOne(
+          academicClassObjectId,
+        );
+        if (!academicClassDoc)
+          throw new BadRequestException(
+            `班级 ID '${academicClassId}' 不存在。`,
+          );
+        if (
+          !academicClassDoc.college ||
+          // @ts-ignore
+          !(academicClassDoc.college._id instanceof Types.ObjectId) ||
+          // @ts-ignore
+          !academicClassDoc.college._id.equals(
+            currentCollegeId as Types.ObjectId,
+          )
+        ) {
+          throw new BadRequestException(
+            `班级 '${academicClassDoc.name}' 不属于当前指定的学院。`,
+          );
+        }
+        if (
+          !academicClassDoc.major ||
+          // @ts-ignore
+          !(academicClassDoc.major._id instanceof Types.ObjectId) ||
+          // @ts-ignore
+          !academicClassDoc.major._id.equals(currentMajorId as Types.ObjectId)
+        ) {
+          throw new BadRequestException(
+            `班级 '${academicClassDoc.name}' 不属于当前指定的专业。`,
+          );
+        }
+        updatePayload.academicClass = academicClassObjectId;
+      }
+    }
+
+    // 处理 staffInfo 更新
+    if (staffInfoDto && userToUpdate.userType === 'staff') {
+      const newStaffInfo: Partial<User['staffInfo']> = {};
+      if (staffInfoDto.officeLocation !== undefined)
+        newStaffInfo.officeLocation =
+          staffInfoDto.officeLocation === null
+            ? undefined
+            : staffInfoDto.officeLocation;
+      if (staffInfoDto.title !== undefined)
+        newStaffInfo.title =
+          staffInfoDto.title === null ? undefined : staffInfoDto.title;
+
+      if (staffInfoDto.departmentId !== undefined) {
+        if (staffInfoDto.departmentId === null) {
+          newStaffInfo.department = undefined;
+        } else {
+          const staffDeptObjectId = transformObjectId(
+            staffInfoDto.departmentId,
+          );
+          const staffDeptCollege =
+            await this.collegeService.findOne(staffDeptObjectId);
+          if (!staffDeptCollege)
+            throw new BadRequestException(
+              `教职工信息中的部门ID '${staffInfoDto.departmentId}' 不存在。`,
+            );
+          newStaffInfo.department = staffDeptObjectId;
+        }
+      }
+      if (staffInfoDto.managedClassIds !== undefined) {
+        if (
+          staffInfoDto.managedClassIds === null ||
+          staffInfoDto.managedClassIds.length === 0
+        ) {
+          newStaffInfo.managedClasses = [];
+        } else {
+          newStaffInfo.managedClasses = [];
+          for (const classId of staffInfoDto.managedClassIds) {
+            const managedClassObjectId = transformObjectId(classId);
+            const managedClassDoc =
+              await this.academicClassService.findOne(managedClassObjectId);
+            if (!managedClassDoc)
+              throw new BadRequestException(
+                `教职工管理的班级ID '${classId}' 不存在。`,
+              );
+            newStaffInfo.managedClasses.push(managedClassObjectId);
+          }
+        }
+      }
+      updatePayload.staffInfo = { ...userToUpdate.staffInfo, ...newStaffInfo };
+    }
+
     const updatedUser = await this.userModel
-      .findByIdAndUpdate(
-        id,
-        updateUserDto, // 要更新的数据
-        { new: true }, // 选项：返回更新后的文档
-      )
-      .select('-password') // 同样排除密码
+      .findByIdAndUpdate(userObjectId, { $set: updatePayload }, { new: true })
+      .select('-password')
+      .populate({ path: 'roles', model: 'Role' }) // Populate after update
+      .populate({ path: 'college', model: 'College' })
+      .populate({ path: 'major', model: 'Major' })
+      .populate({ path: 'academicClass', model: 'AcademicClass' })
+      .populate({ path: 'staffInfo.department', model: 'College' })
+      .populate({ path: 'staffInfo.managedClasses', model: 'AcademicClass' })
       .exec();
 
     if (!updatedUser) {
-      throw new NotFoundException(`ID 为 '${id}' 的用户不存在。`);
+      // Should not happen if findById was successful, but as a safeguard
+      throw new NotFoundException(`ID 为 '${id}' 的用户在更新后未找到。`);
     }
-    return updatedUser;
+    return updatedUser.toObject() as Omit<User, 'password'>;
   }
 
   // --- 更新用户信息 （个人） ---

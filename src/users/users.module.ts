@@ -5,6 +5,9 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from './user.schema';
 import { FriendsModule } from 'src/friends/friends.module';
 import { RoleModule } from 'src/role/role.module';
+import { CollegeModule } from 'src/college/college.module';
+import { MajorModule } from 'src/major/major.module';
+import { AcademicClassModule } from 'src/academic-class/academic-class.module';
 
 @Module({
   imports: [
@@ -16,7 +19,10 @@ import { RoleModule } from 'src/role/role.module';
       },
     ]),
     forwardRef(() => FriendsModule),
-    RoleModule
+    RoleModule,
+    CollegeModule,
+    MajorModule,
+    AcademicClassModule
   ],
   controllers: [UsersController],
   providers: [UsersService],

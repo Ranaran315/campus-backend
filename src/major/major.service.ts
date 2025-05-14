@@ -55,7 +55,7 @@ export class MajorService {
     return this.majorModel.find(query).populate('college').exec();
   }
 
-  async findOne(id: string): Promise<Major> {
+  async findOne(id: string | Types.ObjectId): Promise<Major> {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException(`Invalid Major ID format "${id}"`);
     }

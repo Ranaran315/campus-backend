@@ -5,6 +5,7 @@ import {
   IsDefined,
   IsEmail,
   IsEnum,
+  IsMongoId,
   IsNotEmpty,
   IsObject,
   IsOptional,
@@ -14,20 +15,24 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-class DepartmentInfoDto {
-  @IsString() @IsNotEmpty() departmentId: string;
-  @IsString() @IsNotEmpty() departmentName: string;
-}
+export class StaffInfoDto {
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  title?: string[];
 
-class ClassInfoDto {
-  @IsString() @IsNotEmpty() classId: string;
-  @IsString() @IsNotEmpty() className: string;
-}
+  @IsString()
+  @IsOptional()
+  officeLocation?: string;
 
-class StaffInfoDto {
-  @IsArray() @IsString({ each: true }) @IsOptional() title?: string[];
-  @IsString() @IsOptional() officeLocation?: string; // 注意修正拼写
-  @IsArray() @IsString({ each: true }) @IsOptional() managedClassIds?: string[];
+  @IsMongoId() // 教职工所属部门/学院 ID
+  @IsOptional()
+  departmentId?: string;
+
+  @IsArray()
+  @IsMongoId({ each: true }) // 教职工管理的班级 ID 列表
+  @IsOptional()
+  managedClassIds?: string[];
 }
 
 // 创建用户数据传输对象
@@ -53,22 +58,22 @@ export class CreateUserDto {
   @IsOptional()
   nickname?: string;
 
-  @IsEnum(['male', 'female', 'other'], { message: '性别无效' }) // 假设允许的值
+  @IsEnum(['male', 'female', 'other'], { message: '性别无效' })
   @IsNotEmpty()
   gender: string;
 
-  @IsObject()
-  @ValidateNested() // 需要验证嵌套对象
-  @Type(() => DepartmentInfoDto) // 需要 class-transformer 辅助转换和验证
-  @IsDefined() // 确保 departmentInfo 对象本身被提供
-  departmentInfo: DepartmentInfoDto;
+  // 新增关联字段
+  @IsMongoId({ message: '无效的学院ID格式' })
+  @IsNotEmpty({ message: '学院ID不能为空' }) // 假设学院是必填项
+  collegeId: string;
 
-  // classInfo 只在 userType 为 student 时需要，可以在 Service 层做逻辑校验，或者 DTO 层面做更复杂的条件验证
-  @IsObject()
-  @ValidateNested()
-  @Type(() => ClassInfoDto)
+  @IsMongoId({ message: '无效的专业ID格式' })
   @IsOptional()
-  classInfo?: ClassInfoDto;
+  majorId?: string; // 专业可选
+
+  @IsMongoId({ message: '无效的班级ID格式' })
+  @IsOptional()
+  academicClassId?: string; // 班级可选，主要针对学生
 
   // staffInfo 只在 userType 为 staff 时需要
   @IsObject()
@@ -80,10 +85,9 @@ export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
   @Matches(/^1[3-9]\d{9}$/, { message: '请输入有效的中国大陆手机号码。' })
-  @IsOptional() // 手机号在注册时是否必填？根据需求调整
-  phone: string;
+  phone: string; // 手机号在注册时必填
 
   @IsEmail({}, { message: '请输入有效的邮箱地址' })
   @IsNotEmpty()
-  email?: string;
+  email: string; // 邮箱在注册时必填
 }

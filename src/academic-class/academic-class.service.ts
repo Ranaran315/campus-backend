@@ -143,7 +143,7 @@ export class AcademicClassService {
       .exec();
   }
 
-  async findOne(id: string): Promise<AcademicClass> {
+  async findOne(id: string | Types.ObjectId): Promise<AcademicClass> {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException(`Invalid Academic Class ID format "${id}"`);
     }

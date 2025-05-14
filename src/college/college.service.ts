@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { College, CollegeDocument } from './schemas/college.schema';
 import { CreateCollegeDto } from './dto/create-college.dto';
 import { UpdateCollegeDto } from './dto/update-college.dto';
@@ -20,7 +20,7 @@ export class CollegeService {
     return this.collegeModel.find().exec();
   }
 
-  async findOne(id: string): Promise<College> {
+  async findOne(id: string | Types.ObjectId): Promise<College> {
     const college = await this.collegeModel.findById(id).exec();
     if (!college) {
       throw new NotFoundException(`College with ID "${id}" not found`);

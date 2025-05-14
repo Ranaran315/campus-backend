@@ -32,33 +32,45 @@ export class User {
   staffId?: string; // 工号（教职工特有）
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Role' }], default: [] })
   roles: Types.ObjectId[]; // 角色
-  @Prop({ type: Object })
-  departmentInfo: {
-    // 学院信息
-    departmentId: string; // 学院ID
-    departmentName: string; // 学院名称
+  @Prop({ type: Types.ObjectId, ref: 'College', required: false, index: true })
+  college?: Types.ObjectId; // 所属学院 (学生/教职工均可有)
+
+  @Prop({ type: Types.ObjectId, ref: 'Major', required: false, index: true })
+  major?: Types.ObjectId; // 所属专业 (主要为学生)
+
+  @Prop({
+    type: Types.ObjectId,
+    ref: 'AcademicClass',
+    required: false,
+    index: true,
+  })
+  academicClass?: Types.ObjectId; // 所属行政班级 (主要为学生)
+  @Prop({
+    type: {
+      officeLocation: { type: String, required: false },
+      title: { type: [String], required: false }, // 职称可以是多个
+      // 教职工所属的部门/学院
+      department: {
+        type: Types.ObjectId,
+        ref: 'College',
+        required: false,
+      },
+      // 教职工管理的班级 (例如辅导员)
+      managedClasses: [
+        { type: Types.ObjectId, ref: 'AcademicClass', required: false },
+      ],
+    },
+    required: false,
+    _id: false, // staffInfo 不是一个独立的文档，不需要 _id
+  })
+  staffInfo?: {
+    officeLocation?: string;
+    title?: string[];
+    department?: Types.ObjectId;
+    managedClasses?: Types.ObjectId[];
   };
-  @Prop({ type: Object })
-  majorInfo: {
-    // 专业信息
-    majorId: string; // 专业ID
-    majorName: string; // 专业名称
-  };
-  @Prop({ type: Object })
-  classInfo: {
-    // 班级信息（学生）
-    classId: string; // 班级ID
-    className: string; // 班级名称
-  };
-  @Prop({ type: Object })
-  staffInfo: {
-    // 教职工特有信息
-    officeLocation?: string; // 办公地点
-    title?: string[]; // 职称
-    managedClassIds?: string[]; // 管理的班级ID（辅导员）
-  };
-  @Prop({ type: Object })
-  @Prop({ unique: true })
+
+  @Prop({ unique: true, required: true, trim: true })
   email: string;
   @Prop({ required: true, unique: true })
   phone: string; // 手机号
