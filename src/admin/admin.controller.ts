@@ -12,15 +12,19 @@ import {
   NotFoundException,
   BadRequestException,
   Get,
+  UseGuards, // Ensure UseGuards is imported
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { RoleService } from '../role/role.service';
 import { Types } from 'mongoose';
 import { AssignRoleDto } from './dto/assign-role.dto';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Import JwtAuthGuard
+import { PermissionsGuard } from '../auth/guards/permissions.guard'; // Import PermissionsGuard
+import { Permissions } from '../auth/decorators/permissions.decorator'; // Import Permissions decorator
 
-@Controller('admin/users') // Base path for admin user operations
-// @UseGuards(AdminGuard) // Placeholder for a future AdminGuard
+@Controller('admin/users')
+@UseGuards(JwtAuthGuard) // Apply JwtAuthGuard at controller level
 export class AdminController {
   constructor(
     private readonly usersService: UsersService,
@@ -28,10 +32,11 @@ export class AdminController {
   ) {}
 
   // 分配角色给用户
-  @Post(':userId/assign-role') // 修改方法路径
+  @Post(':userId/assign-role')
+  @UseGuards(PermissionsGuard)
+  @Permissions('user:assign_roles_to_any') // Permission to assign roles
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   @HttpCode(HttpStatus.OK)
-  // @Roles('SuperAdmin', 'Admin') // Placeholder for specific admin role checks
   async assignRoleToUser(
     @Param('userId') userId: string,
     @Body() assignRoleDto: AssignRoleDto,
@@ -68,6 +73,8 @@ export class AdminController {
 
   // 取消分配角色给用户
   @Delete(':userId/unassign-role/:roleId')
+  @UseGuards(PermissionsGuard)
+  @Permissions('user:assign_roles_to_any') // Same permission, as it's managing role assignments
   @HttpCode(HttpStatus.OK) // Or HttpStatus.NO_CONTENT if no body is returned
   // @Roles('SuperAdmin', 'Admin')
   async removeRoleFromUser(
@@ -101,6 +108,8 @@ export class AdminController {
 
   // 管理员修改用户信息
   @Patch(':id')
+  @UseGuards(PermissionsGuard)
+  @Permissions('user:edit_account_any') // Permission to edit any user's account
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   @HttpCode(HttpStatus.OK)
   async adminUpdateUser(
@@ -112,6 +121,8 @@ export class AdminController {
 
   // 管理员获取所有用户（带关联信息）
   @Get()
+  @UseGuards(PermissionsGuard)
+  @Permissions('user:list_all') // Permission to list all users
   async getAllUsersWithRelations() {
     return this.usersService.findAllWithRelations();
   }

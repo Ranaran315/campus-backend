@@ -522,7 +522,7 @@ export class UsersService {
       updatePayload.staffInfo = { ...userToUpdate.staffInfo, ...newStaffInfo };
     }
 
-    this.logger.debug('更新用户信息', updatePayload)
+    this.logger.debug('更新用户信息', updatePayload);
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(userObjectId, { $set: updatePayload }, { new: true })
