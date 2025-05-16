@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Delete,
+  Patch,
   Param,
   Body,
   HttpCode,
@@ -10,11 +11,13 @@ import {
   ValidationPipe,
   NotFoundException,
   BadRequestException,
+  Get,
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { RoleService } from '../role/role.service';
 import { Types } from 'mongoose';
 import { AssignRoleDto } from './dto/assign-role.dto';
+import { UpdateUserDto } from '../users/dto/update-user.dto';
 
 @Controller('admin/users') // Base path for admin user operations
 // @UseGuards(AdminGuard) // Placeholder for a future AdminGuard
@@ -24,7 +27,7 @@ export class AdminController {
     private readonly roleService: RoleService,
   ) {}
 
-  // 分配角色给用户的端点
+  // 分配角色给用户
   @Post(':userId/assign-role') // 修改方法路径
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   @HttpCode(HttpStatus.OK)
@@ -63,8 +66,8 @@ export class AdminController {
     return this.usersService.addRoleToUser(userId, assignRoleDto.roleId);
   }
 
-  // Endpoint to remove a role from a user
-  @Delete(':userId/unassign-role/:roleId') 
+  // 取消分配角色给用户
+  @Delete(':userId/unassign-role/:roleId')
   @HttpCode(HttpStatus.OK) // Or HttpStatus.NO_CONTENT if no body is returned
   // @Roles('SuperAdmin', 'Admin')
   async removeRoleFromUser(
@@ -96,10 +99,20 @@ export class AdminController {
     return this.usersService.removeRoleFromUser(userId, roleId);
   }
 
-  // You can add other admin-specific user management endpoints here, e.g.,
-  // @Get()
-  // async getAllUsersForAdmin() { /* ... */ }
+  // 管理员修改用户信息
+  @Patch(':id')
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  @HttpCode(HttpStatus.OK)
+  async adminUpdateUser(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
+    return this.usersService.update(id, updateUserDto);
+  }
 
-  // @Patch(':userId/status')
-  // async updateUserStatus(@Param('userId') userId: string, @Body() statusUpdateDto: any) { /* ... */ }
+  // 管理员获取所有用户（带关联信息）
+  @Get()
+  async getAllUsersWithRelations() {
+    return this.usersService.findAllWithRelations();
+  }
 }

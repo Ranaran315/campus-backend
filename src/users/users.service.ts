@@ -293,6 +293,17 @@ export class UsersService {
     return this.userModel.find().select('-password').exec(); // .exec() 返回 Promise
   }
 
+  // 管理员专用：获取所有用户（带关联信息）
+  async findAllWithRelations(): Promise<UserDocument[]> {
+    return this.userModel
+      .find()
+      .select('-password')
+      .populate({ path: 'college', model: 'College' })
+      .populate({ path: 'major', model: 'Major' })
+      .populate({ path: 'academicClass', model: 'AcademicClass' })
+      .exec();
+  }
+
   // --- 根据 ID 查询单个用户 (READ ONE) ---
   async findOneById(
     id: string | Types.ObjectId,
@@ -510,6 +521,8 @@ export class UsersService {
       }
       updatePayload.staffInfo = { ...userToUpdate.staffInfo, ...newStaffInfo };
     }
+
+    this.logger.debug('更新用户信息', updatePayload)
 
     const updatedUser = await this.userModel
       .findByIdAndUpdate(userObjectId, { $set: updatePayload }, { new: true })
@@ -734,5 +747,82 @@ export class UsersService {
 
     await user.save();
     return this.findOneById(userId, true); // Return user with populated roles
+  }
+
+  // --- 根据用户类型查找所有用户 ---
+  async findAllUserIdsByFilter(
+    userType?: 'student' | 'staff' | 'all',
+  ): Promise<Types.ObjectId[]> {
+    const query = this.userModel.find();
+    if (userType && userType !== 'all') {
+      query.where({ userType: userType });
+    }
+    const users = await query.select('_id').lean().exec(); // .lean() 返回普通 JS 对象，更快
+    return users.map((user) => user._id);
+  }
+
+  // --- 根据角色 ID 查找用户 ID ---
+  async findUserIdsByRoleIds(
+    roleIds: string[],
+    userType?: 'student' | 'staff' | 'all',
+  ): Promise<Types.ObjectId[]> {
+    const objectRoleIds = roleIds.map((id) => new Types.ObjectId(id)); // 确保是 ObjectId
+    const query = this.userModel.find({ roles: { $in: objectRoleIds } });
+    if (userType && userType !== 'all') {
+      query.where({ userType: userType });
+    }
+    const users = await query.select('_id').lean().exec();
+    return users.map((user) => user._id);
+  }
+
+  // --- 根据学院 ID 查找用户 ID ---
+  async findUserIdsByCollegeIds(
+    collegeIds: string[],
+    userType?: 'student' | 'staff' | 'all',
+  ): Promise<Types.ObjectId[]> {
+    const objectCollegeIds = collegeIds.map((id) => new Types.ObjectId(id));
+    const query = this.userModel.find({ college: { $in: objectCollegeIds } });
+    if (userType && userType !== 'all') {
+      query.where({ userType: userType });
+    }
+    const users = await query.select('_id').lean().exec();
+    return users.map((user) => user._id);
+  }
+
+  // --- 根据专业 ID 查找用户 ID ---
+  async findUserIdsByMajorIds(
+    majorIds: string[],
+    userType?: 'student' | 'staff' | 'all',
+  ): Promise<Types.ObjectId[]> {
+    const objectMajorIds = majorIds.map((id) => new Types.ObjectId(id));
+    const query = this.userModel.find({ major: { $in: objectMajorIds } });
+    if (userType && userType !== 'all') {
+      query.where({ userType: userType });
+    }
+    const users = await query.select('_id').lean().exec();
+    return users.map((user) => user._id);
+  }
+
+  // --- 根据班级 ID 查找用户 ID ---
+  async findUserIdsByAcademicClassIds(
+    academicClassIds: string[],
+    userType?: 'student' | 'staff' | 'all',
+  ): Promise<Types.ObjectId[]> {
+    const objectAcademicClassIds = academicClassIds.map(
+      (id) => new Types.ObjectId(id),
+    );
+    const query = this.userModel.find({
+      academicClass: { $in: objectAcademicClassIds },
+    });
+    if (userType && userType !== 'all') {
+      query.where({ userType: userType });
+    }
+    const users = await query.select('_id').lean().exec();
+    return users.map((user) => user._id);
+  }
+
+  // --- 根据 ID 列表查找用户信息 ---
+  async findUsersByIds(userIds: Types.ObjectId[]): Promise<UserDocument[]> {
+    return this.userModel.find({ _id: { $in: userIds } }).exec();
   }
 }

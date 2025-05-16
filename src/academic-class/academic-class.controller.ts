@@ -14,11 +14,14 @@ import {
   BadRequestException,
   ParseIntPipe,
   DefaultValuePipe,
+  UseGuards,
 } from '@nestjs/common';
 import { AcademicClassService } from './academic-class.service';
 import { CreateAcademicClassDto } from './dto/create-academic-class.dto';
 import { UpdateAcademicClassDto } from './dto/update-academic-class.dto';
 import { Types } from 'mongoose';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 
 @Controller('academic-classes') // Consistent plural naming
 export class AcademicClassController {
@@ -32,8 +35,8 @@ export class AcademicClassController {
       transform: true,
     }),
   )
-  // @Roles('SuperAdmin', 'Admin')
-  // @Permissions('academicclass:create')
+  @UseGuards(PermissionsGuard)
+  @Permissions('academic_class:create')
   create(@Body() createAcademicClassDto: CreateAcademicClassDto) {
     return this.academicClassService.create(createAcademicClassDto);
   }
@@ -74,8 +77,8 @@ export class AcademicClassController {
       transform: true,
     }),
   )
-  // @Roles('SuperAdmin', 'Admin')
-  // @Permissions('academicclass:update')
+  @UseGuards(PermissionsGuard)
+  @Permissions('academic_class:update')
   update(
     @Param('id') id: string,
     @Body() updateAcademicClassDto: UpdateAcademicClassDto,
@@ -88,8 +91,8 @@ export class AcademicClassController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @Roles('SuperAdmin')
-  // @Permissions('academicclass:delete')
+  @UseGuards(PermissionsGuard)
+  @Permissions('academic_class:delete')
   async remove(@Param('id') id: string): Promise<void> {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException(`Invalid Academic Class ID format "${id}"`);

@@ -16,6 +16,7 @@ import { AdminModule } from './admin/admin.module';
 import { CollegeModule } from './college/college.module';
 import { MajorModule } from './major/major.module';
 import { AcademicClassModule } from './academic-class/academic-class.module';
+import { InformModule } from './inform/inform.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { AcademicClassModule } from './academic-class/academic-class.module';
     CollegeModule,
     MajorModule,
     AcademicClassModule,
+    InformModule,
   ],
   controllers: [AppController, AuthController, FriendsController],
   providers: [AppService, AuthService],

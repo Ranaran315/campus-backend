@@ -12,13 +12,14 @@ import {
   HttpStatus,
   Query,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { MajorService } from './major.service';
 import { CreateMajorDto } from './dto/create-major.dto';
 import { UpdateMajorDto } from './dto/update-major.dto';
 import { Types } from 'mongoose';
-// import { Roles } from '../auth/decorators/roles.decorator';
-// import { Permissions } from '../auth/decorators/permissions.decorator';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 
 @Controller('majors')
 export class MajorController {
@@ -26,8 +27,8 @@ export class MajorController {
 
   @Post()
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
-  // @Roles('SuperAdmin', 'Admin')
-  // @Permissions('major:create')
+  @UseGuards(PermissionsGuard)
+  @Permissions('major:create')
   create(@Body() createMajorDto: CreateMajorDto) {
     return this.majorService.create(createMajorDto);
   }
@@ -50,8 +51,8 @@ export class MajorController {
 
   @Patch(':id')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
-  // @Roles('SuperAdmin', 'Admin')
-  // @Permissions('major:update')
+  @UseGuards(PermissionsGuard)
+  @Permissions('major:update')
   update(@Param('id') id: string, @Body() updateMajorDto: UpdateMajorDto) {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException(`Invalid Major ID format "${id}"`);
@@ -61,8 +62,8 @@ export class MajorController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @Roles('SuperAdmin')
-  // @Permissions('major:delete')
+  @UseGuards(PermissionsGuard)
+  @Permissions('major:delete')
   async remove(@Param('id') id: string): Promise<void> {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException(`Invalid Major ID format "${id}"`);
