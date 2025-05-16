@@ -17,14 +17,16 @@ import { CreateCollegeDto } from './dto/create-college.dto';
 import { UpdateCollegeDto } from './dto/update-college.dto';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { Permissions } from '../auth/decorators/permissions.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Import JwtAuthGuard
 
-@Controller('colleges') // 路由前缀统一为复数形式
+@Controller('colleges')
+@UseGuards(JwtAuthGuard)
 export class CollegeController {
   constructor(private readonly collegeService: CollegeService) {}
 
   @Post()
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
-  @UseGuards(PermissionsGuard)
+  @UseGuards(PermissionsGuard) // PermissionsGuard will run after JwtAuthGuard (implicitly, due to order of execution)
   @Permissions('college:create')
   create(@Body() createCollegeDto: CreateCollegeDto) {
     return this.collegeService.create(createCollegeDto);
@@ -54,6 +56,6 @@ export class CollegeController {
   @Permissions('college:delete')
   async remove(@Param('id') id: string) {
     await this.collegeService.remove(id);
-    return; // For 204 No Content
+    // return; // For 204 No Content - this is implicit if method returns void/Promise<void> and @HttpCode(204) is set
   }
 }

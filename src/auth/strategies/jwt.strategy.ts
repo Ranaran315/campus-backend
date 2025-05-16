@@ -3,8 +3,17 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { UserDocument } from 'src/users/user.schema';
+import { User, UserDocument } from 'src/users/user.schema'; // 确保 User 也被导入
 import { UsersService } from 'src/users/users.service';
+import { Types } from 'mongoose'; // 导入 Types
+
+// 定义 AuthenticatedUser 接口
+export interface AuthenticatedUser extends Omit<User, 'roles'> {
+  _id: Types.ObjectId;
+  id: string;
+  roles: string[]; // 来自 JWT payload
+  permissions: string[]; // 来自 JWT payload
+}
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -21,21 +30,33 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   private readonly logger = new Logger(JwtStrategy.name);
 
-  async validate(payload: any): Promise<UserDocument> {
-    // payload 是解码后的 JWT 内容 { username, sub, roles, iat, exp }
-    // 这里决定 request.user 附加什么信息
-    // 可以只返回必要信息，减少数据库查询（如果不需要实时数据）
-
+  async validate(payload: any): Promise<AuthenticatedUser> {
+    // 返回类型修改为 AuthenticatedUser
     this.logger.debug('JWT payload:', payload);
 
-    const user = await this.usersService.findOneById(payload.sub);
-    if (!user) {
+    const userFromDb = await this.usersService.findOneById(payload.sub);
+    if (!userFromDb) {
       throw new UnauthorizedException('User not found or token invalid.');
     }
-    return user;
-    // 如果需要最新用户数据，可以注入 UsersService 在这里根据 payload.sub 查询
-    // const user = await this.usersService.findOne(payload.sub);
-    // if (!user) throw new UnauthorizedException();
-    // return user;
+
+    // 将 UserDocument 转换为普通对象
+    // .toObject() 返回的类型是 User 类的属性加上 _id 等 Mongoose 添加的属性。
+    // 我们断言为 Omit<User, 'roles'> & { _id: Types.ObjectId } 以便扩展。
+    const plainUserObject = userFromDb.toObject() as Omit<User, 'roles'> & {
+      _id: Types.ObjectId;
+    };
+
+    const authenticatedUser: AuthenticatedUser = {
+      ...plainUserObject, // 展开从数据库获取并转换后的用户对象属性
+      id: userFromDb._id.toString(), // 确保 id 是字符串形式的 _id
+      roles: payload.roles || [], // 从 JWT payload 获取 roles
+      permissions: payload.permissions || [], // 从 JWT payload 获取 permissions
+    };
+
+    this.logger.debug(
+      'Authenticated user object constructed:',
+      authenticatedUser,
+    );
+    return authenticatedUser;
   }
 }

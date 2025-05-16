@@ -1,12 +1,17 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  Logger,
+} from '@nestjs/common'; // Import Logger
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
-import { UserDocument } from '../../users/user.schema';
-import { RoleDocument } from '../../role/role.schema';
-import { Types } from 'mongoose'; // Import Types for ObjectId check
+import { AuthenticatedUser } from '../strategies/jwt.strategy'; // Import AuthenticatedUser
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
+  private readonly logger = new Logger(PermissionsGuard.name); // Add logger instance
+
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -21,46 +26,37 @@ export class PermissionsGuard implements CanActivate {
 
     const { user } = context
       .switchToHttp()
-      .getRequest<{ user?: UserDocument }>();
+      .getRequest<{ user?: AuthenticatedUser }>(); // Use AuthenticatedUser type
 
-    if (!user || !Array.isArray(user.roles) || user.roles.length === 0) {
-      // If no roles, user cannot have any permissions from them.
-      // Access will be denied if requiredPermissions is not empty.
+    this.logger.debug(`User object in PermissionsGuard:`, user); // Log the user object
+    this.logger.debug(
+      `Required permissions: ${requiredPermissions.join(', ')}`,
+    );
+
+    // Check if user exists and has a permissions array
+    if (!user || !Array.isArray(user.permissions)) {
+      this.logger.error(
+        'PermissionsGuard: User object or user.permissions array is missing or not an array.',
+        JSON.stringify(user), // Log user object as string for better inspection
+      );
       return false;
     }
 
-    // Runtime check to ensure roles are populated RoleDocument objects, not just ObjectIds
-    const firstRole = user.roles[0];
-    if (
-      typeof firstRole === 'string' || // Check if it's a string ObjectId
-      firstRole instanceof Types.ObjectId || // Check if it's an ObjectId instance
-      !firstRole || // Check if it's null or undefined
-      typeof firstRole !== 'object' || // Check if it's not an object
-      !('permissions' in firstRole) || // Check for a distinctive property of RoleDocument
-      !Array.isArray((firstRole as RoleDocument).permissions)
-    ) {
-      console.error(
-        'PermissionsGuard: user.roles do not appear to be populated RoleDocument[]. Actual first role:',
-        firstRole,
-      );
-      return false; // Deny access if roles are not in the expected shape
-    }
+    const userPermissions = new Set<string>(user.permissions);
+    this.logger.debug(
+      `User permissions: ${Array.from(userPermissions).join(', ')}`,
+    );
 
-    // Now we are more confident in the type assertion
-    const userRoles = user.roles as unknown as RoleDocument[];
-
-    const userPermissions = new Set<string>();
-    userRoles.forEach((role) => {
-      // It's good practice to ensure role and role.permissions exist and are arrays
-      if (role && Array.isArray(role.permissions)) {
-        role.permissions.forEach((permission) =>
-          userPermissions.add(permission),
-        );
-      }
-    });
-
-    return requiredPermissions.every((permission) =>
+    const hasAllRequiredPermissions = requiredPermissions.every((permission) =>
       userPermissions.has(permission),
     );
+
+    if (!hasAllRequiredPermissions) {
+      this.logger.warn(
+        `PermissionsGuard: User does not have all required permissions. Missing: ${requiredPermissions.filter((p) => !userPermissions.has(p)).join(', ')}`,
+      );
+    }
+
+    return hasAllRequiredPermissions;
   }
 }

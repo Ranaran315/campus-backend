@@ -22,8 +22,10 @@ import { UpdateAcademicClassDto } from './dto/update-academic-class.dto';
 import { Types } from 'mongoose';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { Permissions } from '../auth/decorators/permissions.decorator';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @Controller('academic-classes') // Consistent plural naming
+@UseGuards(JwtAuthGuard)
 export class AcademicClassController {
   constructor(private readonly academicClassService: AcademicClassService) {}
 

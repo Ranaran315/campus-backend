@@ -20,8 +20,10 @@ import { UpdateMajorDto } from './dto/update-major.dto';
 import { Types } from 'mongoose';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { Permissions } from '../auth/decorators/permissions.decorator';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @Controller('majors')
+@UseGuards(JwtAuthGuard)
 export class MajorController {
   constructor(private readonly majorService: MajorService) {}
 
