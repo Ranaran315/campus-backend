@@ -3,7 +3,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { User, UserDocument } from 'src/users/user.schema'; // 确保 User 也被导入
+import { User, UserDocument } from 'src/users/schemas/user.schema'; // 确保 User 也被导入
 import { UsersService } from 'src/users/users.service';
 import { Types } from 'mongoose'; // 导入 Types
 

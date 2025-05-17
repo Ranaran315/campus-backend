@@ -1,7 +1,7 @@
 // 好友请求模型
 import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { User } from '../users/user.schema';
+import { User } from '../../users/schemas/user.schema';
 
 export type FriendRequestDocument = FriendRequest & Document;
 

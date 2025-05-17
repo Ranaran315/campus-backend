@@ -2,16 +2,18 @@ import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { FriendsController } from './friends.controller';
 import { FriendsService } from './friends.service';
+import { FriendRelation, FriendRelationSchema } from './schemas/friends.schema';
+import {
+  FriendRequest,
+  FriendRequestSchema,
+} from './schemas/friendRequest.schema';
+import { User, UserSchema } from '../users/schemas/user.schema';
+import { NotificationsModule } from 'src/notifications/notifications.module';
+import { UsersModule } from 'src/users/users.module';
 import {
   FriendCategory,
   FriendCategorySchema,
-  FriendRelation,
-  FriendRelationSchema,
-} from './friends.schema';
-import { FriendRequest, FriendRequestSchema } from './friendRequest.schema';
-import { User, UserSchema } from '../users/user.schema';
-import { NotificationsModule } from 'src/notifications/notifications.module';
-import { UsersModule } from 'src/users/users.module';
+} from './schemas/friendsCategory.schema';
 
 @Module({
   imports: [

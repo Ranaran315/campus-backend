@@ -10,23 +10,25 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { User, UserDocument } from 'src/users/user.schema';
+import { User, UserDocument } from 'src/users/schemas/user.schema';
 import {
   FriendRequest,
   FriendRequestDocument,
   FriendRequestStatus,
-} from './friendRequest.schema';
+} from './schemas/friendRequest.schema';
 import {
-  FriendCategory,
-  FriendCategoryDocument,
   FriendRelation,
   FriendRelationDocument,
-} from './friends.schema';
+} from './schemas/friends.schema';
 import * as pinyin from 'pinyin'; // 用于处理中文拼音首字母
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { UsersService } from 'src/users/users.service';
 import { Logger } from '@nestjs/common';
 import { transformObjectId } from 'src/utils/transform';
+import {
+  FriendCategory,
+  FriendCategoryDocument,
+} from './schemas/friendsCategory.schema';
 
 interface UserInfo {
   _id: Types.ObjectId | string;

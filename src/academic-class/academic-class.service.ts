@@ -12,7 +12,7 @@ import {
 import { CreateAcademicClassDto } from './dto/create-academic-class.dto';
 import { UpdateAcademicClassDto } from './dto/update-academic-class.dto';
 import { Major, MajorDocument } from '../major/schemas/major.schema';
-import { User, UserDocument } from '../users/user.schema'; // Corrected path
+import { User, UserDocument } from '../users/schemas/user.schema'; // Corrected path
 import { College, CollegeDocument } from '../college/schemas/college.schema';
 
 @Injectable()

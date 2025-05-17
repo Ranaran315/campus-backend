@@ -8,7 +8,7 @@ import {
 } from './schemas/academic-class.schema';
 import { Major, MajorSchema } from '../major/schemas/major.schema';
 import { College, CollegeSchema } from '../college/schemas/college.schema';
-import { User, UserSchema } from '../users/user.schema'; // Corrected path
+import { User, UserSchema } from '../users/schemas/user.schema'; // Corrected path
 // import { AuthModule } from '../auth/auth.module';
 
 @Module({

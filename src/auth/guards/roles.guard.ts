@@ -1,8 +1,8 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { UserDocument } from '../../users/user.schema';
-import { RoleDocument } from '../../role/role.schema';
+import { UserDocument } from '../../users/schemas/user.schema';
+import { RoleDocument } from '../../role/schemas/role.schema';
 import { Types } from 'mongoose'; // Import Types for ObjectId check
 
 @Injectable()

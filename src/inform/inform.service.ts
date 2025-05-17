@@ -25,7 +25,7 @@ import { AcademicClassService } from '../academic-class/academic-class.service';
 import { RoleService } from '../role/role.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
-import { UserDocument } from '../users/user.schema'; // Keep for internal use like _executePublishActions
+import { UserDocument } from '../users/schemas/user.schema'; // Keep for internal use like _executePublishActions
 import {
   GetInformsQueryDto,
   InformSortByQuery,

@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Schema as MongooseSchema } from 'mongoose';
 import { Major } from '../../major/schemas/major.schema';
 import { College } from '../../college/schemas/college.schema';
-import { User } from '../../users/user.schema'; // Corrected path for User schema
+import { User } from '../../users/schemas/user.schema'; // Corrected path for User schema
 
 export type AcademicClassDocument = AcademicClass & Document;
 

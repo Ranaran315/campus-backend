@@ -2,7 +2,7 @@ import { forwardRef, Module } from '@nestjs/common';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { MongooseModule } from '@nestjs/mongoose';
-import { User, UserSchema } from './user.schema';
+import { User, UserSchema } from './schemas/user.schema';
 import { FriendsModule } from 'src/friends/friends.module';
 import { RoleModule } from 'src/role/role.module';
 import { CollegeModule } from 'src/college/college.module';
@@ -22,7 +22,7 @@ import { AcademicClassModule } from 'src/academic-class/academic-class.module';
     RoleModule,
     CollegeModule,
     MajorModule,
-    AcademicClassModule
+    AcademicClassModule,
   ],
   controllers: [UsersController],
   providers: [UsersService],
