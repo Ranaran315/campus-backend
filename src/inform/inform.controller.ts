@@ -59,26 +59,6 @@ export class InformController {
   }
 
   /**
-   * @description 创建并立即发布通知
-   * @route POST /informs/publish-new
-   */
-  @Post('publish-new')
-  @UseGuards(PermissionsGuard)
-  @Permissions('inform:create')
-  @HttpCode(HttpStatus.CREATED)
-  async createAndPublish(
-    @Body() createInformDto: CreateInformDto,
-    @Request() req,
-  ) {
-    const sender = req.user as AuthenticatedUser;
-    // 这里需要 InformService 提供一个直接创建并发布的方法
-    // 或者在 CreateInformDto 中加一个字段如 publishImmediately: true
-    // 然后 create 方法根据这个字段决定是否调用内部的发布逻辑
-    // 为了清晰，我们假设 InformService 有一个 createAndPublish 方法
-    return this.informService.createAndPublish(createInformDto, sender);
-  }
-
-  /**
    * @description 发布一个已存在的草稿通知
    * @route POST /informs/:id/publish
    * @param id Inform 文档的 ID

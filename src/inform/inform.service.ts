@@ -60,7 +60,7 @@ export class InformService {
     private readonly notificationsGateway: NotificationsGateway, // 确保 NotificationsGateway 在 NotificationsModule 中被导出
   ) {}
 
-  // --- 核心业务逻辑方法将在这里实现 ---
+  // --- 创建草稿通知 ---
   async create(
     createInformDto: CreateInformDto,
     senderAuth: AuthenticatedUser, // Changed from UserDocument to AuthenticatedUser
@@ -86,10 +86,12 @@ export class InformService {
     return savedInform;
   }
 
+  // --- 发布通知 ---
   async publish(
     informId: string,
-    publisherAuth: AuthenticatedUser, // Changed from UserDocument to AuthenticatedUser
+    publisherAuth: AuthenticatedUser,
   ): Promise<InformDocument> {
+    // 查找发布人
     const publisherDoc = await this.usersService.findOneById(publisherAuth._id);
     if (!publisherDoc) {
       throw new NotFoundException(
@@ -100,8 +102,8 @@ export class InformService {
       `Attempting to publish inform ID: ${informId} by publisher: ${publisherDoc.username}`,
     );
 
+    // 查找通知
     const informToPublish = await this.informModel.findById(informId);
-
     if (!informToPublish) {
       throw new NotFoundException(`通知 ID '${informId}' 未找到。`);
     }
@@ -119,17 +121,13 @@ export class InformService {
       );
     }
 
-    // Ensure publisher is the original sender
+    // 确保发布人是通知的原始发送者
     if (informToPublish.senderId.toString() !== publisherDoc._id.toString()) {
-      // It was publisher._id before, now it's publisherDoc._id
       throw new BadRequestException('您没有权限发布此通知草稿。');
     }
 
-    // The originalSender for _executePublishActions is the publisherDoc in this context,
-    // as only the original sender can publish their own draft.
-    const originalSenderDoc = publisherDoc;
-
     // 更新状态和发布时间
+    const originalSenderDoc = publisherDoc;
     informToPublish.status = 'published';
     informToPublish.publishAt = new Date();
     const savedPublishedInform = await informToPublish.save();
@@ -139,43 +137,6 @@ export class InformService {
 
     this.logger.log(
       `Inform ID: ${savedPublishedInform._id} published successfully.`,
-    );
-    return savedPublishedInform;
-  }
-
-  async createAndPublish(
-    createInformDto: CreateInformDto,
-    senderAuth: AuthenticatedUser, // Changed from UserDocument to AuthenticatedUser
-  ): Promise<InformDocument> {
-    const senderDoc = await this.usersService.findOneById(senderAuth._id);
-    if (!senderDoc) {
-      throw new NotFoundException(
-        `Sender with ID '${senderAuth._id}' not found.`,
-      );
-    }
-    this.logger.log(
-      `Attempting to create and publish inform by sender: ${senderDoc.username}`,
-    );
-
-    const informData: Partial<Inform> = {
-      ...createInformDto,
-      senderId: senderDoc._id, // Use senderDoc._id
-      status: 'published',
-      publishAt: new Date(),
-    };
-
-    const newInform = new this.informModel(informData);
-    const savedPublishedInform = await newInform.save();
-
-    this.logger.log(
-      `Inform document created with ID: ${savedPublishedInform._id} and status: 'published'`,
-    );
-
-    // 执行公共的发布操作，此时的 senderDoc 就是 originalSender
-    await this._executePublishActions(savedPublishedInform, senderDoc);
-
-    this.logger.log(
-      `Inform ID: ${savedPublishedInform._id} created and published successfully.`,
     );
     return savedPublishedInform;
   }
@@ -192,21 +153,6 @@ export class InformService {
   ): Promise<void> {
     let targetUserIds: Types.ObjectId[] = [];
     const { targetType, targetIds, userTypeFilter } = informDoc;
-
-    // In _executePublishActions, originalSenderDoc is used directly.
-    // The logic for SENDER_* cases should use originalSenderDoc.
-    // For example:
-    // case 'SENDER_OWN_CLASS':
-    //   if (
-    //     originalSenderDoc.userType !== 'student' ||
-    //     !originalSenderDoc.academicClass
-    //   ) { ... }
-    //   targetUserIds = await this.usersService.findUserIdsByAcademicClassIds(
-    //     [originalSenderDoc.academicClass.toString()],
-    //      userTypeFilter,
-    //   );
-    //   break;
-    // Ensure all SENDER_* cases correctly use originalSenderDoc
 
     switch (targetType) {
       case 'ALL':
@@ -361,8 +307,6 @@ export class InformService {
       this.logger.warn(
         `No target users found for publishing inform ID: ${informDoc._id}. The inform is published but has no recipients.`,
       );
-      // Even if no recipients, the inform is considered published.
-      // No need to return early or throw an error here unless specifically required.
     }
 
     if (uniqueUserIds.length > 0) {
@@ -384,7 +328,7 @@ export class InformService {
       }
     }
 
-    // Send WebSocket notifications to the targeted users
+    // 发送 WebSocket 通知
     uniqueUserIds.forEach((userId) => {
       // @ts-ignore
       const informIdStr = informDoc._id.toString();

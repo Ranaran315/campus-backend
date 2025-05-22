@@ -4,7 +4,7 @@ import { User } from '../../users/schemas/user.schema'; // 确保路径正确
 
 export type InformDocument = Inform & Document;
 
-@Schema({ timestamps: true }) // createdAt 和 updatedAt 会自动添加
+@Schema({ timestamps: true })
 export class Inform {
   @Prop({ required: true, trim: true, index: true })
   title: string;
@@ -13,49 +13,56 @@ export class Inform {
   content: string; // 支持富文本或 Markdown
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  senderId: Types.ObjectId; // 发送者用户ID
+  senderId: Types.ObjectId;
 
   @Prop({
     type: String,
     required: true,
     enum: [
-      'ALL', // 全体
-      'ROLE', // 按角色
-      'COLLEGE', // 按学院
-      'MAJOR', // 按专业
-      'ACADEMIC_CLASS', // 按班级
-      'SPECIFIC_USERS', // 特定用户
-      'SENDER_OWN_CLASS', // 发送者所在班级 (学生)
-      'SENDER_MANAGED_CLASSES', // 发送者管理的所有班级 (教职工)
-      'SENDER_COLLEGE_STUDENTS', // 发送者所在学院的所有学生 (教职工/学生均可适用，后端解析)
-      // 可以根据需要添加更多一键派发类型
+      'ALL',
+      'ROLE',
+      'COLLEGE',
+      'MAJOR',
+      'ACADEMIC_CLASS',
+      'SPECIFIC_USERS',
+      'SENDER_OWN_CLASS',
+      'SENDER_MANAGED_CLASSES',
+      'SENDER_COLLEGE_STUDENTS',
     ],
   })
   targetType: string;
 
-  @Prop({ type: [String], default: [] }) // 存储角色名/ID、学院ID、专业ID、班级ID、用户ID列表
+  @Prop({ type: [String], default: [] })
   targetIds: string[];
 
   @Prop({
     type: String,
-    enum: ['student', 'staff', 'all'], // 注意：Mongoose 枚举值不能是 null 或 undefined
-    required: false, // 设为 false，因为并非所有 targetType 都需要它
+    enum: ['student', 'staff', 'all'],
+    required: false,
   })
   userTypeFilter?: 'student' | 'staff' | 'all';
 
   @Prop({
     type: String,
-    required: true,
     enum: ['high', 'medium', 'low'],
     default: 'medium',
   })
   importance: string;
 
   @Prop({ trim: true })
-  tag?: string; // 通知标签，例如 “教务通知”、“学工通知”
+  tags?: string[];
 
-  @Prop({ type: Boolean, default: false }) // 默认为不允许回复，根据需求调整
+  @Prop({ type: Boolean, default: false })
   allowReplies: boolean;
+
+  @Prop({ type: Boolean, default: false })
+  requireConfirm: boolean;
+
+  @Prop({ type: Date })
+  deadline?: Date;
+
+  @Prop({ type: Boolean, default: false })
+  trackReadStatus: boolean; // 是否跟踪阅读状态
 
   @Prop({
     type: [
@@ -64,7 +71,7 @@ export class Inform {
         url: String,
         size: Number,
         mimeType: String,
-        _id: false, // 通常不需要为子文档数组中的对象生成 _id
+        _id: false,
       },
     ],
     default: [],
@@ -76,11 +83,8 @@ export class Inform {
     mimeType?: string;
   }[];
 
-  @Prop({ default: () => new Date() }) // 默认为当前时间
-  publishAt: Date; // 发布时间，可以是预定发布时间
-
-  @Prop()
-  deadline?: Date; // 例如需要回复或提交材料的截止日期
+  @Prop({ default: () => new Date() })
+  publishAt: Date;
 
   @Prop({
     type: String,
@@ -92,13 +96,17 @@ export class Inform {
   status: string;
 
   @Prop({ type: Boolean, default: false })
-  isEdited: boolean; // 标记此通知是否被编辑过
+  isEdited: boolean;
 
   @Prop({ type: Date })
-  lastEditedAt?: Date; // 最后编辑时间
+  lastEditedAt?: Date;
 
   @Prop({ type: Number, default: 0 })
-  editCount: number; // 编辑次数
+  editCount: number;
+
+  // 可选：用于查询优化的作用域键，例如 "CLASS:SWE2101"
+  @Prop({ type: String, index: true })
+  receiverScopeKey?: string;
 }
 
 export const InformSchema = SchemaFactory.createForClass(Inform);

@@ -9,7 +9,7 @@ import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
-// 定义好友请求通知数据结构
+// --- 定义好友请求通知数据结构 ---
 export interface FriendRequestNotificationData {
   requestId: string;
   sender: {
@@ -23,15 +23,14 @@ export interface FriendRequestNotificationData {
   status: 'pending' | 'accepted' | 'rejected' | 'ignored';
 }
 
-// --- 新增：定义好友请求状态更新的通知数据结构 ---
+// --- 定义好友请求状态更新的通知数据结构 ---
 export interface FriendRequestUpdateData {
   requestId: string;
-  status: 'accepted' | 'rejected'; // 根据你的 FriendRequestStatus 类型调整
-  // 可以选择性地包含处理者信息，如果前端需要展示
+  status: 'accepted' | 'rejected';
   // handler?: { _id: string; nickname: string; };
 }
 
-// --- 新增：定义新通知的通知数据结构 ---
+// --- 定义新通知的通知数据结构 ---
 export interface NewInformNotificationData {
   id: string; // 通知ID
   title: string; // 通知标题
@@ -56,7 +55,7 @@ export class NotificationsGateway
   private readonly logger = new Logger('NotificationsGateway');
 
   // 存储用户ID和对应的socket连接
-  private connectedUsers = new Map<string, string>();
+  private connectedUsers = new Map<string, string>(); // 目前仅支持一人一端
 
   constructor(private jwtService: JwtService) {}
 
@@ -204,7 +203,7 @@ export class NotificationsGateway
     }
   }
 
-  // --- 新增：发送新通知的方法 ---
+  // --- 发送新通知的方法 ---
   sendNewInformNotification(
     userId: string,
     data: NewInformNotificationData,

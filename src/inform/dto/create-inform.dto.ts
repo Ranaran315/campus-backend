@@ -73,7 +73,7 @@ export class CreateInformDto {
   @IsString()
   @IsOptional()
   @MaxLength(50)
-  tag?: string; // 原 category 字段，重命名为 tag 更简洁
+  tags?: string[]; // 原 category 字段，重命名为 tag 更简洁
 
   @IsBoolean()
   @IsOptional()
@@ -96,4 +96,12 @@ export class CreateInformDto {
   @IsEnum(['draft', 'published']) // 创建时通常是草稿或直接发布
   @IsOptional()
   status?: 'draft' | 'published';
+
+  @IsOptional()
+  @IsBoolean()
+  trackReadStatus?: boolean; // 是否跟踪阅读状态
+
+  @IsOptional()
+  @IsBoolean()
+  requireConfirm?: boolean; // 是否需要确认
 }
