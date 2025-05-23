@@ -10,10 +10,18 @@ import {
   HttpStatus,
   UsePipes,
   ValidationPipe,
+  UseGuards, // Added
+  Request, // Added
 } from '@nestjs/common';
 import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Added
+import { UserDocument } from '../users/schemas/user.schema'; // Added
+import {
+  UserRoleResponseDto,
+  RoleScopeResponseDto,
+} from './dto/role-response.dto'; // Added
 // import { RolesGuard } from '../auth/guards/roles.guard'; // 假设你将来会有 RolesGuard
 // import { Roles } from '../auth/decorators/roles.decorator'; // 假设你将来会有 Roles 装饰器
 
@@ -35,6 +43,27 @@ export class RoleController {
   // @Roles('SuperAdmin', 'Admin', 'DepartmentAdmin') // 示例：更多角色可以查看列表
   findAll() {
     return this.roleService.findAll();
+  }
+
+  // 获取当前用户角色列表
+  @Get('mine/sendable')
+  @UseGuards(JwtAuthGuard)
+  async getCurrentUserSendableRoles(
+    @Request() req,
+  ): Promise<UserRoleResponseDto[]> {
+    const user = req.user;
+    return this.roleService.getCurrentUserSendableRoles(user);
+  }
+
+  // 获取角色获取发布范围
+  @Get(':roleCode/scopes') // Changed path to be more descriptive
+  @UseGuards(JwtAuthGuard)
+  async getScopesForRole(
+    @Request() req,
+    @Param('roleCode') roleCode: string,
+  ): Promise<RoleScopeResponseDto[]> {
+    const user = req.user as UserDocument;
+    return this.roleService.getScopesForRole(user, roleCode);
   }
 
   // 获取单个角色
@@ -78,7 +107,7 @@ export class RoleController {
     }
     return this.roleService.addPermissionToRole(roleId, permission);
   }
-  
+
   // 从角色中移除权限
   @Patch(':id/permissions/remove')
   // @Roles('SuperAdmin', 'Admin')

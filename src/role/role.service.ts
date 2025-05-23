@@ -2,7 +2,8 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
-  BadRequestException, // 引入 BadRequestException
+  BadRequestException,
+  Logger, // 引入 BadRequestException
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -10,6 +11,12 @@ import { Role, RoleDocument } from './schemas/role.schema';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { VALID_PERMISSIONS } from './constants/permissions.constants';
+import { UserDocument } from '../users/schemas/user.schema';
+import {
+  RoleScopeResponseDto,
+  UserRoleResponseDto,
+} from './dto/role-response.dto';
+import { AuthenticatedUser } from 'src/auth/types';
 
 function isValidPermission(permission: string): boolean {
   return VALID_PERMISSIONS.has(permission);
@@ -28,6 +35,8 @@ function validatePermissions(permissions: string[]): void {
 @Injectable()
 export class RoleService {
   constructor(@InjectModel(Role.name) private roleModel: Model<RoleDocument>) {}
+
+  private readonly logger = new Logger(RoleService.name);
 
   async create(createRoleDto: CreateRoleDto): Promise<RoleDocument> {
     // 返回 RoleDocument
@@ -169,5 +178,160 @@ export class RoleService {
       return role.save(); // 正确
     }
     return role;
+  }
+
+  async getCurrentUserSendableRoles(
+    user: AuthenticatedUser,
+  ): Promise<UserRoleResponseDto[]> {
+    if (!user || !user.roles || user.roles.length === 0) {
+      return [];
+    }
+
+    const sendableRoles: UserRoleResponseDto[] = [];
+    let rolesToProcess: RoleDocument[];
+
+    const roleNames = user.roles;
+    this.logger.debug(
+      `User roles from AuthenticatedUser are names: [${roleNames.join(', ')}]. Fetching roles by name.`,
+    );
+
+    rolesToProcess = await this.roleModel
+      .find({ name: { $in: roleNames } })
+      .exec();
+
+    if (rolesToProcess.length !== roleNames.length) {
+      const foundRoleNames = rolesToProcess.map((r) => r.name);
+      const missingRoleNames = roleNames.filter(
+        (name) => !foundRoleNames.includes(name),
+      );
+      this.logger.warn(
+        `Could not find RoleDocuments for all role names. Requested: [${roleNames.join(', ')}]. Found: [${foundRoleNames.join(', ')}]. Missing: [${missingRoleNames.join(', ')}]`,
+      );
+    }
+
+    if (!rolesToProcess || rolesToProcess.length === 0) {
+      this.logger.debug(
+        'No RoleDocuments to process after fetching from role names.',
+      );
+      return [];
+    }
+
+    this.logger.debug(`Processing ${rolesToProcess.length} RoleDocuments.`);
+    for (const role of rolesToProcess) {
+      // Removed permission check: role.permissions.some((p) => p.startsWith('inform:publish'))
+      // Now, all roles found for the user are considered sendable.
+      if (role) {
+        // Basic check to ensure role object exists
+        sendableRoles.push({
+          code: role.name, // Use 'name' (e.g., 'student', 'admin') as the code
+          name: role.displayName, // Use 'displayName' (e.g., '学生', '管理员') for display
+          description: role.description,
+        });
+      }
+    }
+    this.logger.debug(
+      'Final sendable roles (all user roles are sendable):',
+      sendableRoles,
+    );
+    return sendableRoles;
+  }
+
+  async getScopesForRole(
+    user: UserDocument,
+    roleCode: string,
+  ): Promise<RoleScopeResponseDto[]> {
+    const scopes: RoleScopeResponseDto[] = [];
+
+    // Default scope for all roles
+    scopes.push({
+      label: '我的好友',
+      targetType: 'SPECIFIC_USERS', // Directly use the string literal as defined in Inform schema
+      description: '选择我的好友作为发送对象',
+    });
+
+    // General scopes available to many roles
+    scopes.push({
+      label: '指定全体',
+      targetType: 'ALL',
+      description: '向全校范围发送',
+    });
+    scopes.push({
+      label: '指定角色',
+      targetType: 'ROLE',
+      description: '选择一个或多个角色作为发送对象',
+    });
+    scopes.push({
+      label: '指定学院',
+      targetType: 'COLLEGE',
+      description: '选择一个或多个学院作为发送对象',
+    });
+    scopes.push({
+      label: '指定专业',
+      targetType: 'MAJOR',
+      description: '选择一个或多个专业作为发送对象',
+    });
+    scopes.push({
+      label: '指定班级',
+      targetType: 'ACADEMIC_CLASS',
+      description: '选择一个或多个班级作为发送对象',
+    });
+
+    // Role-specific scopes
+    // Find the role document to check its properties or permissions if needed
+    // const roleDoc = await this.roleModel.findOne({ name: roleCode }).exec();
+    // if (!roleDoc) {
+    //   throw new NotFoundException(`Role with code '${roleCode}' not found.`);
+    // }
+
+    // Example: Counselor-specific scopes
+    if (roleCode === 'counselor' || roleCode === 'instructor') {
+      // Assuming 'counselor' is a role 'name'
+      if (
+        user.staffInfo?.managedClasses &&
+        user.staffInfo.managedClasses.length > 0
+      ) {
+        scopes.push({
+          label: '我管理的班级',
+          targetType: 'SENDER_MANAGED_CLASSES',
+          description: '向您管理的所有班级发送',
+        });
+      }
+    }
+
+    // Example: Department Admin specific scopes
+    if (roleCode === 'department_admin' || roleCode === 'college_admin') {
+      // Assuming these are role 'name's
+      if (user.college) {
+        // User's primary college
+        // Ensure college is populated to get its name
+        // This might require fetching the user with populated college if it's not already
+        const collegeName = (user.college as any)?.name || '本学院'; // Basic check, improve if college is ObjectId
+        scopes.push({
+          label: `我所在学院全体师生 (${collegeName})`,
+          targetType: 'SENDER_COLLEGE_STUDENTS',
+          description: `向您所在的学院 (${collegeName}) 的全体师生发送`,
+        });
+      }
+    }
+
+    // Add other role-specific scopes based on roleCode and user properties
+    // e.g., for a 'student_union_president'
+    // if (roleCode === 'student_union_president') {
+    //   scopes.push({
+    //     label: '全体学生',
+    //     targetType: 'USER_TYPE_STUDENTS', // This targetType would need to be added to Inform schema
+    //     description: '向全校所有学生发送',
+    //   });
+    // }
+
+    const uniqueScopes = scopes.filter(
+      (scope, index, self) =>
+        index ===
+        self.findIndex(
+          (s) => s.label === scope.label && s.targetType === scope.targetType,
+        ),
+    );
+
+    return uniqueScopes;
   }
 }
