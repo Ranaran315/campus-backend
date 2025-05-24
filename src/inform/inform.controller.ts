@@ -9,6 +9,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  Delete,
 } from '@nestjs/common';
 import { InformService, PopulatedInformReceipt } from './inform.service'; // Import PopulatedInformReceipt
 import { CreateInformDto } from './dto/create-inform.dto';
@@ -103,5 +104,50 @@ export class InformController {
   ): Promise<InformDocument> {
     const currentUser = req.user as AuthenticatedUser; // Extract the authenticated user
     return this.informService.findOneById(id, currentUser);
+  }
+
+  /**
+   * @description 删除草稿状态的通知
+   * @route DELETE /informs/:id
+   * @param id Inform 文档的 ID
+   */
+  @Delete(':id')
+  // @UseGuards(PermissionsGuard)
+  // @Permissions('inform:delete')
+  @HttpCode(HttpStatus.OK)
+  async deleteDraft(@Param('id') informId: string, @Request() req) {
+    const currentUser = req.user as AuthenticatedUser;
+    await this.informService.deleteDraft(informId, currentUser);
+    return { success: true, message: '通知草稿已成功删除' };
+  }
+
+  /**
+   * @description 撤销已发布的通知
+   * @route POST /informs/:id/revoke
+   * @param id Inform 文档的 ID
+   */
+  @Post(':id/revoke')
+  // @UseGuards(PermissionsGuard)
+  // @Permissions('inform:revoke')
+  @HttpCode(HttpStatus.OK)
+  async revokePublishedInform(@Param('id') informId: string, @Request() req) {
+    const currentUser = req.user as AuthenticatedUser;
+    await this.informService.revokePublishedInform(informId, currentUser);
+    return { success: true, message: '通知已成功撤销发布' };
+  }
+
+  /**
+   * @description 归档已发布的通知
+   * @route POST /informs/:id/archive
+   * @param id Inform 文档的 ID
+   */
+  @Post(':id/archive')
+  // @UseGuards(PermissionsGuard)
+  // @Permissions('inform:archive')
+  @HttpCode(HttpStatus.OK)
+  async archivePublishedInform(@Param('id') informId: string, @Request() req) {
+    const currentUser = req.user as AuthenticatedUser;
+    await this.informService.archivePublishedInform(informId, currentUser);
+    return { success: true, message: '通知已成功归档' };
   }
 }

@@ -113,6 +113,12 @@ export class Inform {
 
   @Prop({ type: Boolean, default: false })
   isPublic: boolean;
+
+  @Prop()
+  archivedAt: Date;
+
+  @Prop()
+  lastRevokeAt: Date;
 }
 
 export const InformSchema = SchemaFactory.createForClass(Inform);

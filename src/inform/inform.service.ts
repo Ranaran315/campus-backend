@@ -559,14 +559,17 @@ export class InformService {
         return true;
       case 'SPECIFIC_USERS':
         return (
-          inform.targetIds?.some((targetId) => transformObjectId(targetId).equals(userId)) || false
+          inform.targetIds?.some((targetId) =>
+            transformObjectId(targetId).equals(userId),
+          ) || false
         );
       case 'ROLE':
         return (
           inform.targetIds?.some((roleId) =>
             user.roles.some(
               (userRole) =>
-                (userRole as any)._id?.equals(roleId) || userRole === transformObjectId(roleId),
+                (userRole as any)._id?.equals(roleId) ||
+                userRole === transformObjectId(roleId),
             ),
           ) || false
         );
@@ -650,5 +653,105 @@ export class InformService {
     throw new ForbiddenException(
       'You do not have permission to access this resource.',
     );
+  }
+
+  // 删除草稿通知
+  async deleteDraft(
+    informId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<void> {
+    const inform = await this.informModel.findById(informId);
+
+    if (!inform) {
+      throw new NotFoundException(`通知 ID '${informId}' 未找到。`);
+    }
+
+    if (inform.status !== 'draft') {
+      throw new BadRequestException(`只能删除草稿状态的通知。`);
+    }
+
+    // 确保只有通知的创建者才能删除
+    if (
+      !transformObjectId(inform.senderId).equals(
+        transformObjectId(currentUser._id),
+      )
+    ) {
+      throw new ForbiddenException('您没有权限删除此通知草稿。');
+    }
+
+    await this.informModel.findByIdAndDelete(informId);
+    this.logger.log(`通知草稿 ${informId} 已被用户 ${currentUser._id} 删除。`);
+  }
+
+  // 撤销已发布的通知
+  async revokePublishedInform(
+    informId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<InformDocument> {
+    const inform = await this.informModel.findById(informId);
+
+    if (!inform) {
+      throw new NotFoundException(`通知 ID '${informId}' 未找到。`);
+    }
+
+    if (inform.status !== 'published') {
+      throw new BadRequestException(`只能撤销已发布状态的通知。`);
+    }
+
+    // 确保只有通知的创建者才能撤销
+    if (
+      !transformObjectId(inform.senderId).equals(
+        transformObjectId(currentUser._id),
+      )
+    ) {
+      throw new ForbiddenException('您没有权限撤销此通知。');
+    }
+
+    // 更新通知状态为草稿
+    inform.status = 'draft';
+    inform.lastRevokeAt = new Date();
+
+    const updatedInform = await inform.save();
+
+    // 删除所有收件人的回执记录
+    await this.informReceiptModel.deleteMany({ informId: informId });
+
+    this.logger.log(`通知 ${informId} 已被用户 ${currentUser._id} 撤销发布。`);
+
+    return updatedInform;
+  }
+
+  // 归档已发布的通知
+  async archivePublishedInform(
+    informId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<InformDocument> {
+    const inform = await this.informModel.findById(informId);
+
+    if (!inform) {
+      throw new NotFoundException(`通知 ID '${informId}' 未找到。`);
+    }
+
+    if (inform.status !== 'published') {
+      throw new BadRequestException(`只能归档已发布状态的通知。`);
+    }
+
+    // 确保只有通知的创建者才能归档
+    if (
+      !transformObjectId(inform.senderId).equals(
+        transformObjectId(currentUser._id),
+      )
+    ) {
+      throw new ForbiddenException('您没有权限归档此通知。');
+    }
+
+    // 更新通知状态为归档
+    inform.status = 'archived';
+    inform.archivedAt = new Date();
+
+    const updatedInform = await inform.save();
+    this.logger.log(`通知 ${informId} 已被用户 ${currentUser._id} 归档。`);
+
+    return updatedInform;
   }
 }
