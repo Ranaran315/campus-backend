@@ -46,7 +46,17 @@ export class CreateInformDto {
   @MaxLength(250) // Max length for description
   description?: string; // Added description field
 
-  @IsEnum(['ALL', 'ROLE', 'COLLEGE', 'MAJOR', 'ACADEMIC_CLASS', 'SPECIFIC_USERS', 'SENDER_OWN_CLASS', 'SENDER_MANAGED_CLASSES', 'SENDER_COLLEGE_STUDENTS'])
+  @IsEnum([
+    'ALL',
+    'ROLE',
+    'COLLEGE',
+    'MAJOR',
+    'ACADEMIC_CLASS',
+    'SPECIFIC_USERS',
+    'SENDER_OWN_CLASS',
+    'SENDER_MANAGED_CLASSES',
+    'SENDER_COLLEGE_STUDENTS',
+  ])
   targetScope: string;
 
   @IsArray()
@@ -62,9 +72,8 @@ export class CreateInformDto {
   @IsNotEmpty()
   importance: string;
 
-  @IsString()
+  @IsArray()
   @IsOptional()
-  @MaxLength(50)
   tags?: string[]; // 原 category 字段，重命名为 tag 更简洁
 
   @IsBoolean()
