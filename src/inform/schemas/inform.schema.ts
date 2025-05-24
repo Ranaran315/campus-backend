@@ -12,6 +12,9 @@ export class Inform {
   @Prop({ required: true })
   content: string; // 支持富文本或 Markdown
 
+  @Prop({ trim: true }) // Optional description
+  description?: string;
+
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   senderId: Types.ObjectId;
 
@@ -30,7 +33,7 @@ export class Inform {
       'SENDER_COLLEGE_STUDENTS',
     ],
   })
-  targetType: string;
+  targetScope: string;
 
   @Prop({ type: [String], default: [] })
   targetIds: string[];
@@ -107,6 +110,9 @@ export class Inform {
   // 可选：用于查询优化的作用域键，例如 "CLASS:SWE2101"
   @Prop({ type: String, index: true })
   receiverScopeKey?: string;
+
+  @Prop({ type: Boolean, default: false })
+  isPublic: boolean;
 }
 
 export const InformSchema = SchemaFactory.createForClass(Inform);

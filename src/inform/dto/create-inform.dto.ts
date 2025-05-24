@@ -2,16 +2,15 @@
 import {
   IsString,
   IsNotEmpty,
-  IsMongoId,
-  IsArray,
-  IsEnum,
   IsOptional,
+  IsArray,
+  ArrayMinSize,
+  ValidateNested,
+  IsEnum,
   IsBoolean,
   IsDateString,
-  ValidateNested,
-  ArrayMinSize,
   MaxLength,
-  MinLength,
+  IsMongoId, // Import MaxLength
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -35,27 +34,20 @@ class InformAttachmentDto {
 export class CreateInformDto {
   @IsString()
   @IsNotEmpty()
-  @MinLength(1)
-  @MaxLength(200)
+  @MaxLength(100) // Example: Max length for title
   title: string;
 
   @IsString()
   @IsNotEmpty()
   content: string;
 
-  @IsEnum([
-    'ALL',
-    'ROLE',
-    'COLLEGE',
-    'MAJOR',
-    'ACADEMIC_CLASS',
-    'SPECIFIC_USERS',
-    'SENDER_OWN_CLASS',
-    'SENDER_MANAGED_CLASSES',
-    'SENDER_COLLEGE_STUDENTS',
-  ])
-  @IsNotEmpty()
-  targetType: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(250) // Max length for description
+  description?: string; // Added description field
+
+  @IsEnum(['ALL', 'ROLE', 'COLLEGE', 'MAJOR', 'ACADEMIC_CLASS', 'SPECIFIC_USERS', 'SENDER_OWN_CLASS', 'SENDER_MANAGED_CLASSES', 'SENDER_COLLEGE_STUDENTS'])
+  targetScope: string;
 
   @IsArray()
   @IsMongoId({ each: true }) // 假设 targetIds 存储的是 ObjectId 字符串
@@ -91,11 +83,15 @@ export class CreateInformDto {
 
   @IsDateString()
   @IsOptional()
-  deadline?: Date;
+  deadline?: string;
 
   @IsEnum(['draft', 'published']) // 创建时通常是草稿或直接发布
   @IsOptional()
   status?: 'draft' | 'published';
+
+  @IsOptional()
+  @IsBoolean()
+  isPublic?: boolean; // Added isPublic field
 
   @IsOptional()
   @IsBoolean()

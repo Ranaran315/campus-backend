@@ -55,8 +55,8 @@ export class RoleController {
     return this.roleService.getCurrentUserSendableRoles(user);
   }
 
-  // 获取角色获取发布范围
-  @Get(':roleCode/scopes') // Changed path to be more descriptive
+  // 获取角色获取通知发布范围
+  @Get(':roleCode/inform/scopes') // Changed path to be more descriptive
   @UseGuards(JwtAuthGuard)
   async getScopesForRole(
     @Request() req,

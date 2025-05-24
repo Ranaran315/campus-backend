@@ -242,93 +242,86 @@ export class RoleService {
   ): Promise<RoleScopeResponseDto[]> {
     const scopes: RoleScopeResponseDto[] = [];
 
-    // Default scope for all roles
+    /** 1. 特定用户选择（所有角色均支持） */
     scopes.push({
-      label: '我的好友',
-      targetType: 'SPECIFIC_USERS', // Directly use the string literal as defined in Inform schema
-      description: '选择我的好友作为发送对象',
+      label: '选择特定用户',
+      targetType: 'SPECIFIC_USERS',
+      description: '手动选择好友或班级成员发送通知',
     });
 
-    // General scopes available to many roles
-    scopes.push({
-      label: '指定全体',
-      targetType: 'ALL',
-      description: '向全校范围发送',
-    });
-    scopes.push({
-      label: '指定角色',
-      targetType: 'ROLE',
-      description: '选择一个或多个角色作为发送对象',
-    });
-    scopes.push({
-      label: '指定学院',
-      targetType: 'COLLEGE',
-      description: '选择一个或多个学院作为发送对象',
-    });
-    scopes.push({
-      label: '指定专业',
-      targetType: 'MAJOR',
-      description: '选择一个或多个专业作为发送对象',
-    });
-    scopes.push({
-      label: '指定班级',
-      targetType: 'ACADEMIC_CLASS',
-      description: '选择一个或多个班级作为发送对象',
-    });
+    /** 2. 班长/学生干部类角色（仅支持本班/好友） */
+    if (roleCode === 'class_monitor' || roleCode === 'student_union') {
+      scopes.push({
+        label: '我所在班级',
+        targetType: 'SENDER_OWN_CLASS',
+        description: '发送给您所在班级的所有成员',
+      });
+      scopes.push({
+        label: '我的好友',
+        targetType: 'FRIENDS',
+        description: '从好友中选择接收者',
+      });
+    }
 
-    // Role-specific scopes
-    // Find the role document to check its properties or permissions if needed
-    // const roleDoc = await this.roleModel.findOne({ name: roleCode }).exec();
-    // if (!roleDoc) {
-    //   throw new NotFoundException(`Role with code '${roleCode}' not found.`);
-    // }
-
-    // Example: Counselor-specific scopes
+    /** 3. 辅导员/教师角色 */
     if (roleCode === 'counselor' || roleCode === 'instructor') {
-      // Assuming 'counselor' is a role 'name'
       if (
-        user.staffInfo?.managedClasses &&
-        user.staffInfo.managedClasses.length > 0
+        user.staffInfo?.managedClasses?.length &&
+        user.staffInfo?.managedClasses?.length > 0
       ) {
         scopes.push({
           label: '我管理的班级',
           targetType: 'SENDER_MANAGED_CLASSES',
-          description: '向您管理的所有班级发送',
+          description: '向您负责的班级学生发送通知',
         });
       }
-    }
-
-    // Example: Department Admin specific scopes
-    if (roleCode === 'department_admin' || roleCode === 'college_admin') {
-      // Assuming these are role 'name's
       if (user.college) {
-        // User's primary college
-        // Ensure college is populated to get its name
-        // This might require fetching the user with populated college if it's not already
-        const collegeName = (user.college as any)?.name || '本学院'; // Basic check, improve if college is ObjectId
+        const collegeName = (user.college as any)?.name || '本学院';
         scopes.push({
-          label: `我所在学院全体师生 (${collegeName})`,
+          label: `我所在学院 (${collegeName}) 的学生`,
           targetType: 'SENDER_COLLEGE_STUDENTS',
-          description: `向您所在的学院 (${collegeName}) 的全体师生发送`,
+          description: `向 ${collegeName} 学院所有学生发送通知`,
         });
       }
     }
 
-    // Add other role-specific scopes based on roleCode and user properties
-    // e.g., for a 'student_union_president'
-    // if (roleCode === 'student_union_president') {
-    //   scopes.push({
-    //     label: '全体学生',
-    //     targetType: 'USER_TYPE_STUDENTS', // This targetType would need to be added to Inform schema
-    //     description: '向全校所有学生发送',
-    //   });
-    // }
+    /** 4. 系统/学院管理员角色（开放所有组织结构选择） */
+    if (['college_admin', 'system_admin'].includes(roleCode)) {
+      scopes.push(
+        {
+          label: '全体用户（全校）',
+          targetType: 'ALL',
+          description: '全校所有用户',
+        },
+        {
+          label: '按角色选择',
+          targetType: 'ROLE',
+          description: '选择一个或多个角色（如教师、学生）作为接收对象',
+        },
+        {
+          label: '按学院选择',
+          targetType: 'COLLEGE',
+          description: '选择一个或多个学院作为通知对象',
+        },
+        {
+          label: '按专业选择',
+          targetType: 'MAJOR',
+          description: '选择一个或多个专业',
+        },
+        {
+          label: '按班级选择',
+          targetType: 'ACADEMIC_CLASS',
+          description: '选择一个或多个班级',
+        },
+      );
+    }
 
+    /** 去重：防止某些重复项被重复添加 */
     const uniqueScopes = scopes.filter(
       (scope, index, self) =>
         index ===
         self.findIndex(
-          (s) => s.label === scope.label && s.targetType === scope.targetType,
+          (s) => s.label === scope.label && s.targetType === s.targetType,
         ),
     );
 

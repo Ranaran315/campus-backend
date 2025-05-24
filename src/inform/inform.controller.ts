@@ -15,10 +15,12 @@ import { CreateInformDto } from './dto/create-inform.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { Permissions } from '../auth/decorators/permissions.decorator';
-import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { GetInformsQueryDto } from './dto/get-informs-query.dto';
 import { PaginatedResponse } from '../types/paginated-response.interface';
 import { Types } from 'mongoose'; // Import Types
+import { GetMyCreatedInformsDto } from './dto/get-my-created-informs.dto'; // Import the new DTO
+import { InformDocument } from './schemas/inform.schema';
+import { AuthenticatedUser } from 'src/auth/types';
 
 @Controller('informs')
 @UseGuards(JwtAuthGuard) // 对所有 informs 路由启用 JWT 认证
@@ -70,5 +72,36 @@ export class InformController {
   async publishDraft(@Param('id') informId: string, @Request() req) {
     const publisher = req.user as AuthenticatedUser;
     return this.informService.publish(informId, publisher);
+  }
+
+  /**
+   * @description 获取当前用户创建的通知列表 (支持分页、筛选、排序)
+   * @route GET /informs/my-created
+   */
+  @Get('my-created')
+  @UseGuards(PermissionsGuard)
+  @HttpCode(HttpStatus.OK)
+  async getMyCreatedInforms(
+    @Request() req,
+    @Query() queryDto: GetMyCreatedInformsDto,
+  ): Promise<PaginatedResponse<InformDocument>> {
+    const user = req.user as AuthenticatedUser;
+    const userIdAsObjectId = new Types.ObjectId(user._id); // Ensure user._id is used
+    return this.informService.getMyCreatedInforms(userIdAsObjectId, queryDto);
+  }
+
+  /**
+   * @description 获取指定ID的通知详情
+   * @route GET /informs/:id
+   * @param id Inform 文档的 ID
+   */
+  @Get(':id')
+  @HttpCode(HttpStatus.OK)
+  async getInformById(
+    @Param('id') id: string,
+    @Request() req, // Get the request object
+  ): Promise<InformDocument> {
+    const currentUser = req.user as AuthenticatedUser; // Extract the authenticated user
+    return this.informService.findOneById(id, currentUser);
   }
 }

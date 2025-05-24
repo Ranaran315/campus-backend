@@ -6,14 +6,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { User, UserDocument } from 'src/users/schemas/user.schema'; // 确保 User 也被导入
 import { UsersService } from 'src/users/users.service';
 import { Types } from 'mongoose'; // 导入 Types
-
-// 定义 AuthenticatedUser 接口
-export interface AuthenticatedUser extends Omit<User, 'roles'> {
-  _id: Types.ObjectId;
-  id: string;
-  roles: string[]; // 来自 JWT payload
-  permissions: string[]; // 来自 JWT payload
-}
+import { AuthenticatedUser } from '../types';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
