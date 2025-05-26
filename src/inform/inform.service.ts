@@ -463,10 +463,8 @@ export class InformService {
       findQuery.inform = { $in: informIdsFilteredByImportance };
     }
 
-    const sortOptions: any = {};
-    // For sorting by fields on the Inform document (like publishAt or importance),
-    // an aggregation pipeline is generally more efficient.
-    // Here, we'll sort after populating if such a sort is requested.
+    const sortOptions: any = { isPinned: -1 };
+
     if (
       sortBy === InformSortByQuery.PUBLISH_AT ||
       sortBy === InformSortByQuery.IMPORTANCE ||
