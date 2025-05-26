@@ -33,8 +33,8 @@ export class InformController {
    * @route GET /informs/my-informs
    */
   @Get('my-informs')
-  @UseGuards(PermissionsGuard)
-  @Permissions('inform:read_feed_own')
+  // @UseGuards(PermissionsGuard)
+  // @Permissions('inform:read_feed_own')
   @HttpCode(HttpStatus.OK)
   async getMyInforms(
     @Request() req,
@@ -92,6 +92,22 @@ export class InformController {
   }
 
   /**
+   * @description 通过回执ID获取通知详情
+   * @route GET /informs/receipt/:id
+   * @param id 回执ID
+   */
+  @Get('receipt/:id')
+  @HttpCode(HttpStatus.OK)
+  async getReceiptById(@Param('id') receiptId: string, @Request() req) {
+    const currentUser = req.user as AuthenticatedUser;
+    const receipt = await this.informService.getReceiptById(
+      receiptId,
+      currentUser,
+    );
+    return receipt;
+  }
+
+  /**
    * @description 获取指定ID的通知详情
    * @route GET /informs/:id
    * @param id Inform 文档的 ID
@@ -142,12 +158,62 @@ export class InformController {
    * @param id Inform 文档的 ID
    */
   @Post(':id/archive')
-  // @UseGuards(PermissionsGuard)
-  // @Permissions('inform:archive')
+  @UseGuards(PermissionsGuard)
+  @Permissions('inform:archive')
   @HttpCode(HttpStatus.OK)
   async archivePublishedInform(@Param('id') informId: string, @Request() req) {
     const currentUser = req.user as AuthenticatedUser;
     await this.informService.archivePublishedInform(informId, currentUser);
     return { success: true, message: '通知已成功归档' };
+  }
+
+  /**
+   * @description 标记通知为已读
+   * @route POST /informs/:id/read
+   * @param id 回执ID
+   */
+  @Post(':id/read')
+  @HttpCode(HttpStatus.OK)
+  async markAsRead(@Param('id') receiptId: string, @Request() req) {
+    const currentUser = req.user as AuthenticatedUser;
+    const updatedReceipt = await this.informService.markAsRead(
+      receiptId,
+      currentUser,
+    );
+    return { success: true, data: updatedReceipt };
+  }
+
+  /**
+   * @description 设置通知置顶状态
+   * @route POST /informs/:id/pin
+   * @param id 回执ID
+   */
+  @Post(':id/pin')
+  @HttpCode(HttpStatus.OK)
+  async togglePin(
+    @Param('id') receiptId: string,
+    @Body() pinDto: { isPinned: boolean },
+    @Request() req,
+  ) {
+    const currentUser = req.user as AuthenticatedUser;
+    const updatedReceipt = await this.informService.togglePin(
+      receiptId,
+      pinDto.isPinned,
+      currentUser,
+    );
+    return { success: true, data: updatedReceipt };
+  }
+
+  /**
+   * @description 删除用户的通知回执
+   * @route DELETE /informs/:id/receipt
+   * @param id 回执ID
+   */
+  @Delete(':id/receipt')
+  @HttpCode(HttpStatus.OK)
+  async deleteReceipt(@Param('id') receiptId: string, @Request() req) {
+    const currentUser = req.user as AuthenticatedUser;
+    await this.informService.deleteReceipt(receiptId, currentUser);
+    return { success: true, message: '通知已成功删除' };
   }
 }

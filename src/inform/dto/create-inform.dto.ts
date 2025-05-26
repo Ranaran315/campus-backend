@@ -60,9 +60,9 @@ export class CreateInformDto {
   targetScope: string;
 
   @IsArray()
-  @IsMongoId({ each: true }) // 假设 targetIds 存储的是 ObjectId 字符串
-  @IsOptional() // 对于 'ALL' 或 SENDER_* 类型，此字段可能为空
-  targetIds?: string[];
+  @IsMongoId({ each: true })
+  @IsOptional()
+  targetUsers?: string[]; // 已修改为与Schema一致的名称
 
   @IsEnum(['student', 'staff', 'all'])
   @IsOptional()

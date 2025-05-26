@@ -5,6 +5,11 @@ export const transformObjectId = (
   id: string | Types.ObjectId,
   fieldName: string = 'ID',
 ): Types.ObjectId => {
+
+  if (!id) {
+    throw new BadRequestException(`${fieldName} 不能为空`);
+  }
+
   if (typeof id === 'string') {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException(`无效的 ${fieldName} 格式: ${id}`);

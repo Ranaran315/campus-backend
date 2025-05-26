@@ -16,7 +16,7 @@ export class Inform {
   description?: string;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  senderId: Types.ObjectId;
+  sender: Types.ObjectId;
 
   @Prop({
     type: String,
@@ -36,7 +36,7 @@ export class Inform {
   targetScope: string;
 
   @Prop({ type: [String], default: [] })
-  targetIds: string[];
+  targetUsers: string[];
 
   @Prop({
     type: String,

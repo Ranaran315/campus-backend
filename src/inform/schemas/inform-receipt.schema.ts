@@ -8,10 +8,10 @@ export type InformReceiptDocument = InformReceipt & Document;
 @Schema({ timestamps: { createdAt: 'receivedAt', updatedAt: true } }) // receivedAt 作为创建时间，updatedAt 记录后续更新
 export class InformReceipt {
   @Prop({ type: Types.ObjectId, ref: Inform.name, required: true, index: true })
-  informId: Types.ObjectId; // 关联的通知ID
+  inform: Types.ObjectId; // 关联的通知ID
 
   @Prop({ type: Types.ObjectId, ref: User.name, required: true, index: true })
-  userId: Types.ObjectId; // 接收用户ID
+  user: Types.ObjectId; // 接收用户ID
 
   @Prop({ type: Boolean, default: false, index: true }) // 添加索引方便查询未读通知
   isRead: boolean; // 是否已读

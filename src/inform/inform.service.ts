@@ -39,8 +39,8 @@ import { transformObjectId } from 'src/utils/transform';
 
 // Define the PopulatedInformReceipt interface
 export interface PopulatedInformReceipt
-  extends Omit<InformReceiptDocument, 'informId'> {
-  informId: InformDocument | null;
+  extends Omit<InformReceiptDocument, 'inform'> {
+  inform: InformDocument | null;
 }
 
 @Injectable()
@@ -91,10 +91,11 @@ export class InformService {
       }
     }
 
+    // 修改创建通知时的字段赋值
     const newInform = new this.informModel({
       ...createInformDto,
       deadline: deadlineDate,
-      senderId: senderDoc._id, // Use senderDoc._id
+      sender: senderDoc._id, // 修改：senderId -> sender
       status: 'draft', // Explicitly set status to draft for this method
     });
     const savedInform = await newInform.save();
@@ -139,8 +140,13 @@ export class InformService {
       );
     }
 
+    // 修改发布通知时的权限检查
     // 确保发布人是通知的原始发送者
-    if (informToPublish.senderId.toString() !== publisherDoc._id.toString()) {
+    if (
+      !transformObjectId(informToPublish.sender).equals(
+        transformObjectId(publisherDoc._id),
+      )
+    ) {
       throw new BadRequestException('您没有权限发布此通知草稿。');
     }
 
@@ -170,7 +176,7 @@ export class InformService {
     originalSenderDoc: UserDocument, // Renamed for clarity, type remains UserDocument
   ): Promise<void> {
     let targetUserIds: Types.ObjectId[] = [];
-    const { targetScope, targetIds, userTypeFilter } = informDoc;
+    const { targetScope, targetUsers, userTypeFilter } = informDoc; // 修改：targetIds -> targetUsers
 
     switch (targetScope) {
       case 'ALL':
@@ -178,23 +184,26 @@ export class InformService {
           await this.usersService.findAllUserIdsByFilter(userTypeFilter);
         break;
       case 'ROLE':
-        if (!targetIds || targetIds.length === 0) {
+        if (!targetUsers || targetUsers.length === 0) {
+          // 修改：targetIds -> targetUsers
           throw new BadRequestException(
             `发布通知 ${informDoc._id} 失败：角色目标类型必须提供角色ID列表。`,
           );
         }
         targetUserIds = await this.usersService.findUserIdsByRoleIds(
-          targetIds,
+          targetUsers, // 修改：targetIds -> targetUsers
           userTypeFilter,
         );
         break;
       case 'COLLEGE':
-        if (!targetIds || targetIds.length === 0) {
+        if (!targetUsers || targetUsers.length === 0) {
+          // 修改：targetIds -> targetUsers
           throw new BadRequestException(
             `发布通知 ${informDoc._id} 失败：学院目标类型必须提供学院ID列表。`,
           );
         }
-        for (const collegeId of targetIds) {
+        for (const collegeId of targetUsers) {
+          // 修改：targetIds -> targetUsers
           const college = await this.collegeService.findOne(collegeId);
           if (!college)
             throw new NotFoundException(
@@ -202,17 +211,19 @@ export class InformService {
             );
         }
         targetUserIds = await this.usersService.findUserIdsByCollegeIds(
-          targetIds,
+          targetUsers, // 修改：targetIds -> targetUsers
           userTypeFilter,
         );
         break;
       case 'MAJOR':
-        if (!targetIds || targetIds.length === 0) {
+        if (!targetUsers || targetUsers.length === 0) {
+          // 修改：targetIds -> targetUsers
           throw new BadRequestException(
             `发布通知 ${informDoc._id} 失败：专业目标类型必须提供专业ID列表。`,
           );
         }
-        for (const majorId of targetIds) {
+        for (const majorId of targetUsers) {
+          // 修改：targetIds -> targetUsers
           const major = await this.majorService.findOne(majorId);
           if (!major)
             throw new NotFoundException(
@@ -220,17 +231,19 @@ export class InformService {
             );
         }
         targetUserIds = await this.usersService.findUserIdsByMajorIds(
-          targetIds,
+          targetUsers, // 修改：targetIds -> targetUsers
           userTypeFilter,
         );
         break;
       case 'ACADEMIC_CLASS':
-        if (!targetIds || targetIds.length === 0) {
+        if (!targetUsers || targetUsers.length === 0) {
+          // 修改：targetIds -> targetUsers
           throw new BadRequestException(
             `发布通知 ${informDoc._id} 失败：班级目标类型必须提供班级ID列表。`,
           );
         }
-        for (const classId of targetIds) {
+        for (const classId of targetUsers) {
+          // 修改：targetIds -> targetUsers
           const academicClass =
             await this.academicClassService.findOne(classId);
           if (!academicClass)
@@ -239,20 +252,22 @@ export class InformService {
             );
         }
         targetUserIds = await this.usersService.findUserIdsByAcademicClassIds(
-          targetIds,
+          targetUsers, // 修改：targetIds -> targetUsers
           userTypeFilter,
         );
         break;
       case 'SPECIFIC_USERS':
-        if (!targetIds || targetIds.length === 0) {
+        if (!targetUsers || targetUsers.length === 0) {
+          // 修改：targetIds -> targetUsers
           throw new BadRequestException(
             `发布通知 ${informDoc._id} 失败：特定用户目标类型必须提供用户ID列表。`,
           );
         }
         const users = await this.usersService.findUsersByIds(
-          targetIds.map((id) => new Types.ObjectId(id)),
+          targetUsers.map((id) => new Types.ObjectId(id)), // 修改：targetIds -> targetUsers
         );
-        if (users.length !== targetIds.length) {
+        if (users.length !== targetUsers.length) {
+          // 修改：targetIds -> targetUsers
           this.logger.warn(
             `发布通知 ${informDoc._id} 时，部分指定用户ID无效。`,
           );
@@ -328,21 +343,43 @@ export class InformService {
     }
 
     if (uniqueUserIds.length > 0) {
+      this.logger.log(`准备为通知 ${informDoc._id} 创建 ${uniqueUserIds.length} 条回执记录`);
+
       const receiptsToCreate = uniqueUserIds.map((userId) => ({
-        informId: informDoc._id,
-        userId: userId,
-        status: 'unread', // Default status for new receipts
+        inform: informDoc._id,
+        user: userId,
+        isRead: false,
       }));
+
       try {
-        await this.informReceiptModel.insertMany(receiptsToCreate, {
-          ordered: false, // Continue inserting even if some fail (e.g., due to unique constraints if re-publishing logic changes)
+        const createdReceipts = await this.informReceiptModel.insertMany(receiptsToCreate, {
+          ordered: false,
         });
+
+        this.logger.log(`成功创建了 ${createdReceipts.length} 条回执记录`);
       } catch (error) {
-        // Log error but don't let it break the entire publish flow if some receipts fail (e.g. duplicate for a user)
+        // 提取写入错误的详细信息
+        const writeErrors = error.writeErrors || [];
+        const duplicateKeyErrors = writeErrors.filter(err => err.code === 11000);
+        const otherErrors = writeErrors.filter(err => err.code !== 11000);
+
         this.logger.error(
-          `Error bulk inserting receipts for inform ${informDoc._id}. Some might have failed. Error: ${error.message}`,
-          error.writeErrors || error.stack,
+          `创建通知 ${informDoc._id} 的回执时出错: ${error.message}`,
+          {
+            duplicateErrors: duplicateKeyErrors.length,
+            otherErrors: otherErrors.length
+          }
         );
+
+        // 如果全部失败，记录更严重的错误
+        if (writeErrors.length === uniqueUserIds.length) {
+          this.logger.error(`严重错误: 通知 ${informDoc._id} 的所有回执创建均失败!`);
+        }
+
+        // 对于开发环境，可以记录更多详细信息
+        if (process.env.NODE_ENV === 'development') {
+          this.logger.debug(`错误详情:`, error);
+        }
       }
     }
 
@@ -369,6 +406,12 @@ export class InformService {
     userId: Types.ObjectId,
     queryDto: GetInformsQueryDto,
   ): Promise<PaginatedResponse<PopulatedInformReceipt>> {
+    const sampleReceipt = await this.informReceiptModel
+      .findOne({ user: userId })
+      .lean()
+      .exec();
+    this.logger.debug(`样本回执原始数据: ${JSON.stringify(sampleReceipt)}`);
+
     const {
       page = 1,
       limit = 10,
@@ -378,7 +421,7 @@ export class InformService {
       sortOrder,
     } = queryDto;
 
-    const findQuery: any = { userId };
+    const findQuery: any = { user: userId };
 
     if (status && status !== InformStatusQuery.ALL) {
       findQuery.isRead = status === InformStatusQuery.READ;
@@ -408,7 +451,7 @@ export class InformService {
         };
       }
       // Add the informId filter to the main query
-      findQuery.informId = { $in: informIdsFilteredByImportance };
+      findQuery.inform = { $in: informIdsFilteredByImportance };
     }
 
     const sortOptions: any = {};
@@ -433,17 +476,22 @@ export class InformService {
       .exec();
     const totalPages = Math.ceil(total / limit);
 
-    // Fetch receipts
     const fetchedReceipts = await this.informReceiptModel
       .find(findQuery)
-      .populate<{ informId: InformDocument | null }>({
-        path: 'informId',
-        model: Inform.name,
+      .populate({
+        path: 'inform',  // 使用新的字段名
+        model: 'Inform', // 直接使用字符串而不是Inform.name
+        strictPopulate: false, // 添加此选项以允许更灵活的填充
+        populate: {
+          path: 'sender',
+          model: 'User',
+          select: '_id realname nickname avatar',
+          strictPopulate: false,
+        },
       })
       .sort(sortOptions)
       .skip((page - 1) * limit)
       .limit(limit)
-      // Not using .lean() here to ensure populated informId is a full Mongoose document for easier handling
       .exec();
 
     // Cast to PopulatedInformReceipt[]
@@ -453,15 +501,15 @@ export class InformService {
     // Application-level sorting for fields on the populated Inform document
     if (sortBy === InformSortByQuery.PUBLISH_AT) {
       processedReceipts.sort((a, b) => {
-        const dateA = a.informId?.publishAt?.getTime() || 0;
-        const dateB = b.informId?.publishAt?.getTime() || 0;
+        const dateA = a.inform?.publishAt?.getTime() || 0;
+        const dateB = b.inform?.publishAt?.getTime() || 0;
         return sortOrder === SortOrderQuery.ASC ? dateA - dateB : dateB - dateA;
       });
     } else if (sortBy === InformSortByQuery.IMPORTANCE) {
       const importanceOrder = { high: 1, medium: 2, low: 3 };
       processedReceipts.sort((a, b) => {
-        const importanceA = a.informId?.importance;
-        const importanceB = b.informId?.importance;
+        const importanceA = a.inform?.importance;
+        const importanceB = b.inform?.importance;
         const orderA =
           importanceOrder[importanceA as 'high' | 'medium' | 'low'] || 3;
         const orderB =
@@ -472,8 +520,8 @@ export class InformService {
       });
     } else if (sortBy === InformSortByQuery.DEADLINE) {
       processedReceipts.sort((a, b) => {
-        const deadlineA_time = a.informId?.deadline?.getTime();
-        const deadlineB_time = b.informId?.deadline?.getTime();
+        const deadlineA_time = a.inform?.deadline?.getTime();
+        const deadlineB_time = b.inform?.deadline?.getTime();
 
         // Handle undefined/null deadlines: sort them to the end
         if (deadlineA_time == null && deadlineB_time == null) return 0; // both null, treat as equal
@@ -485,6 +533,8 @@ export class InformService {
           : deadlineB_time - deadlineA_time;
       });
     }
+
+    this.logger.debug('处理后的回执数据:', processedReceipts);
 
     return {
       data: processedReceipts,
@@ -510,7 +560,7 @@ export class InformService {
       searchQuery,
     } = queryDto;
 
-    const query: any = { senderId: userId };
+    const query: any = { sender: userId }; // 修改：senderId -> sender
 
     if (status && status !== 'all') {
       query.status = status;
@@ -559,41 +609,52 @@ export class InformService {
         return true;
       case 'SPECIFIC_USERS':
         return (
-          inform.targetIds?.some((targetId) =>
-            transformObjectId(targetId).equals(userId),
+          inform.targetUsers?.some(
+            (
+              targetUser, // 修改：targetIds -> targetUsers
+            ) => transformObjectId(targetUser).equals(userId),
           ) || false
         );
       case 'ROLE':
         return (
-          inform.targetIds?.some((roleId) =>
-            user.roles.some(
-              (userRole) =>
-                (userRole as any)._id?.equals(roleId) ||
-                userRole === transformObjectId(roleId),
-            ),
+          inform.targetUsers?.some(
+            (
+              roleId, // 修改：targetIds -> targetUsers
+            ) =>
+              user.roles.some(
+                (userRole) =>
+                  (userRole as any)._id?.equals(roleId) ||
+                  userRole === transformObjectId(roleId),
+              ),
           ) || false
         );
       case 'COLLEGE':
         return (
-          inform.targetIds?.some((collegeId) =>
-            user.college?._id.equals(collegeId),
+          inform.targetUsers?.some(
+            (
+              collegeId, // 修改：targetIds -> targetUsers
+            ) => user.college?._id.equals(collegeId),
           ) || false
         );
       case 'MAJOR':
         return (
-          inform.targetIds?.some((majorId) =>
-            user.major?._id.equals(majorId),
+          inform.targetUsers?.some(
+            (
+              majorId, // 修改：targetIds -> targetUsers
+            ) => user.major?._id.equals(majorId),
           ) || false
         );
       case 'ACADEMIC_CLASS':
         return (
-          inform.targetIds?.some((classId) =>
-            user.academicClass?._id.equals(classId),
+          inform.targetUsers?.some(
+            (
+              classId, // 修改：targetIds -> targetUsers
+            ) => user.academicClass?._id.equals(classId),
           ) || false
         );
       case 'SENDER_OWN_CLASS':
         const senderOfInform = await this.usersService.findOneById(
-          inform.senderId.toString(),
+          inform.sender.toString(), // 修改：senderId -> sender
         );
         return (
           !!senderOfInform?.academicClass &&
@@ -603,7 +664,7 @@ export class InformService {
         return false;
       case 'SENDER_COLLEGE_STUDENTS':
         const senderOfInformForCollege = await this.usersService.findOneById(
-          inform.senderId.toString(),
+          inform.sender.toString(),
         );
         return (
           !!senderOfInformForCollege?.college &&
@@ -639,7 +700,9 @@ export class InformService {
 
     // 2. Check if the current user is the sender
     const currentUserId = new Types.ObjectId(currentUser._id); // Assuming currentUser._id is string
-    if (inform.senderId.equals(currentUserId)) {
+    if (
+      transformObjectId(inform.sender).equals(transformObjectId(currentUserId))
+    ) {
       return inform;
     }
 
@@ -670,9 +733,10 @@ export class InformService {
       throw new BadRequestException(`只能删除草稿状态的通知。`);
     }
 
+    // 修改deleteDraft方法中的权限检查
     // 确保只有通知的创建者才能删除
     if (
-      !transformObjectId(inform.senderId).equals(
+      !transformObjectId(inform.sender).equals(
         transformObjectId(currentUser._id),
       )
     ) {
@@ -698,9 +762,10 @@ export class InformService {
       throw new BadRequestException(`只能撤销已发布状态的通知。`);
     }
 
+    // 修改revokePublishedInform方法中的权限检查
     // 确保只有通知的创建者才能撤销
     if (
-      !transformObjectId(inform.senderId).equals(
+      !transformObjectId(inform.sender).equals(
         transformObjectId(currentUser._id),
       )
     ) {
@@ -714,7 +779,7 @@ export class InformService {
     const updatedInform = await inform.save();
 
     // 删除所有收件人的回执记录
-    await this.informReceiptModel.deleteMany({ informId: informId });
+    await this.informReceiptModel.deleteMany({ inform: informId });
 
     this.logger.log(`通知 ${informId} 已被用户 ${currentUser._id} 撤销发布。`);
 
@@ -736,9 +801,10 @@ export class InformService {
       throw new BadRequestException(`只能归档已发布状态的通知。`);
     }
 
+    // 修改archivePublishedInform方法中的权限检查
     // 确保只有通知的创建者才能归档
     if (
-      !transformObjectId(inform.senderId).equals(
+      !transformObjectId(inform.sender).equals(
         transformObjectId(currentUser._id),
       )
     ) {
@@ -753,5 +819,155 @@ export class InformService {
     this.logger.log(`通知 ${informId} 已被用户 ${currentUser._id} 归档。`);
 
     return updatedInform;
+  }
+
+  /**
+   * 通过回执ID获取通知详情
+   * @param receiptId 回执ID
+   * @param currentUser 当前用户
+   */
+  async getReceiptById(receiptId: string, currentUser: AuthenticatedUser) {
+    if (!Types.ObjectId.isValid(receiptId)) {
+      throw new BadRequestException('无效的回执ID格式');
+    }
+
+    const receipt = await this.informReceiptModel
+      .findById(receiptId)
+      .populate({
+        path: 'inform',
+        populate: {
+          path: 'sender', // 这里没有问题，因为Inform模型中已经是sender
+          select: 'username nickname realname avatar',
+        },
+      })
+      .exec();
+
+    if (!receipt) {
+      throw new NotFoundException(`ID为"${receiptId}"的通知回执未找到`);
+    }
+
+    // 检查权限 - 只允许查看自己的通知回执
+    if (
+      !transformObjectId(receipt.user).equals(
+        transformObjectId(currentUser._id),
+      )
+    ) {
+      throw new ForbiddenException('您没有权限查看此通知');
+    }
+
+    return receipt;
+  }
+
+  /**
+   * 标记通知为已读
+   * @param receiptId 回执ID
+   * @param currentUser 当前用户
+   */
+  async markAsRead(receiptId: string, currentUser: AuthenticatedUser) {
+    if (!Types.ObjectId.isValid(receiptId)) {
+      throw new BadRequestException('无效的回执ID格式');
+    }
+
+    const receipt = await this.informReceiptModel.findById(receiptId);
+
+    if (!receipt) {
+      throw new NotFoundException(`ID为"${receiptId}"的通知回执未找到`);
+    }
+
+    // 检查权限
+    if (
+      !transformObjectId(receipt.user).equals(
+        transformObjectId(currentUser._id),
+      )
+    ) {
+      throw new ForbiddenException('您没有权限操作此通知');
+    }
+
+    // 已读则不需要更新
+    if (receipt.isRead) {
+      return receipt;
+    }
+
+    // 更新为已读
+    receipt.isRead = true;
+    receipt.readAt = new Date();
+    await receipt.save();
+
+    this.logger.log(`用户 ${currentUser._id} 已标记通知 ${receiptId} 为已读`);
+
+    return receipt;
+  }
+
+  /**
+   * 设置通知置顶状态
+   * @param receiptId 回执ID
+   * @param isPinned 是否置顶
+   * @param currentUser 当前用户
+   */
+  async togglePin(
+    receiptId: string,
+    isPinned: boolean,
+    currentUser: AuthenticatedUser,
+  ) {
+    if (!Types.ObjectId.isValid(receiptId)) {
+      throw new BadRequestException('无效的回执ID格式');
+    }
+
+    const receipt = await this.informReceiptModel.findById(receiptId);
+
+    if (!receipt) {
+      throw new NotFoundException(`ID为"${receiptId}"的通知回执未找到`);
+    }
+
+    // 检查权限
+    if (
+      !transformObjectId(receipt.user).equals(
+        transformObjectId(currentUser._id),
+      )
+    ) {
+      throw new ForbiddenException('您没有权限操作此通知');
+    }
+
+    // 更新置顶状态
+    receipt.isPinned = isPinned;
+    await receipt.save();
+
+    this.logger.log(
+      `用户 ${currentUser._id} 已${isPinned ? '置顶' : '取消置顶'}通知 ${receiptId}`,
+    );
+
+    return receipt;
+  }
+
+  /**
+   * 删除用户的通知回执
+   * @param receiptId 回执ID
+   * @param currentUser 当前用户
+   */
+  async deleteReceipt(receiptId: string, currentUser: AuthenticatedUser) {
+    if (!Types.ObjectId.isValid(receiptId)) {
+      throw new BadRequestException('无效的回执ID格式');
+    }
+
+    const receipt = await this.informReceiptModel.findById(receiptId);
+
+    if (!receipt) {
+      throw new NotFoundException(`ID为"${receiptId}"的通知回执未找到`);
+    }
+
+    // 检查权限
+    if (
+      !transformObjectId(receipt.user).equals(
+        transformObjectId(currentUser._id),
+      )
+    ) {
+      throw new ForbiddenException('您没有权限删除此通知');
+    }
+
+    await this.informReceiptModel.findByIdAndDelete(receiptId);
+
+    this.logger.log(`用户 ${currentUser._id} 已删除通知回执 ${receiptId}`);
+
+    return true;
   }
 }
