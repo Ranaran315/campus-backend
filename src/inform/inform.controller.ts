@@ -21,7 +21,7 @@ import { PaginatedResponse } from '../types/paginated-response.interface';
 import { Types } from 'mongoose'; // Import Types
 import { GetMyCreatedInformsDto } from './dto/get-my-created-informs.dto'; // Import the new DTO
 import { InformDocument } from './schemas/inform.schema';
-import { AuthenticatedUser } from 'src/auth/types';
+import { AuthenticatedRequest, AuthenticatedUser } from 'src/auth/types';
 
 @Controller('informs')
 @UseGuards(JwtAuthGuard) // 对所有 informs 路由启用 JWT 认证
@@ -96,10 +96,13 @@ export class InformController {
    * @route GET /informs/receipt/:id
    * @param id 回执ID
    */
-  @Get('receipt/:id')
+  @Get('receipt/:id/detail')
   @HttpCode(HttpStatus.OK)
-  async getReceiptById(@Param('id') receiptId: string, @Request() req) {
-    const currentUser = req.user as AuthenticatedUser;
+  async getReceiptById(
+    @Param('id') receiptId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const currentUser = req.user;
     const receipt = await this.informService.getReceiptById(
       receiptId,
       currentUser,
@@ -116,9 +119,9 @@ export class InformController {
   @HttpCode(HttpStatus.OK)
   async getInformById(
     @Param('id') id: string,
-    @Request() req, // Get the request object
+    @Request() req: AuthenticatedRequest,
   ): Promise<InformDocument> {
-    const currentUser = req.user as AuthenticatedUser; // Extract the authenticated user
+    const currentUser = req.user; // Extract the authenticated user
     return this.informService.findOneById(id, currentUser);
   }
 
@@ -172,10 +175,13 @@ export class InformController {
    * @route POST /informs/:id/read
    * @param id 回执ID
    */
-  @Post(':id/read')
+  @Post('receipt/:id/read')
   @HttpCode(HttpStatus.OK)
-  async markAsRead(@Param('id') receiptId: string, @Request() req) {
-    const currentUser = req.user as AuthenticatedUser;
+  async markAsRead(
+    @Param('id') receiptId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const currentUser = req.user;
     const updatedReceipt = await this.informService.markAsRead(
       receiptId,
       currentUser,
@@ -184,11 +190,26 @@ export class InformController {
   }
 
   /**
+   * @description 标记通知为未读
+   * @route POST /informs/:id/unread
+   * @param id 回执ID
+   */
+  @Post('receipt/:id/unread')
+  @UseGuards(JwtAuthGuard)
+  async markAsUnread(
+    @Param('id') id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const currentUser = req.user;
+    return this.informService.markAsUnread(id, currentUser);
+  }
+
+  /**
    * @description 设置通知置顶状态
    * @route POST /informs/:id/pin
    * @param id 回执ID
    */
-  @Post(':id/pin')
+  @Post('receipt/:id/pin')
   @HttpCode(HttpStatus.OK)
   async togglePin(
     @Param('id') receiptId: string,
@@ -215,5 +236,20 @@ export class InformController {
     const currentUser = req.user as AuthenticatedUser;
     await this.informService.deleteReceipt(receiptId, currentUser);
     return { success: true, message: '通知已成功删除' };
+  }
+
+  /**
+   * @description 获取当前用户未读通知回执数量
+   * @route GET /informs/receipt/unread/count
+   */
+  @Get('receipt/unread/count')
+  @UseGuards(JwtAuthGuard)
+  async getUnreadCount(
+    @Request() req: AuthenticatedRequest,
+  ): Promise<{ count: number }> {
+    const userId = req.user._id;
+    const count = await this.informService.getUnreadCountForUser(userId);
+
+    return { count };
   }
 }

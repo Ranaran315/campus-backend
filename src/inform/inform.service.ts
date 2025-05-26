@@ -343,7 +343,9 @@ export class InformService {
     }
 
     if (uniqueUserIds.length > 0) {
-      this.logger.log(`准备为通知 ${informDoc._id} 创建 ${uniqueUserIds.length} 条回执记录`);
+      this.logger.log(
+        `准备为通知 ${informDoc._id} 创建 ${uniqueUserIds.length} 条回执记录`,
+      );
 
       const receiptsToCreate = uniqueUserIds.map((userId) => ({
         inform: informDoc._id,
@@ -352,28 +354,35 @@ export class InformService {
       }));
 
       try {
-        const createdReceipts = await this.informReceiptModel.insertMany(receiptsToCreate, {
-          ordered: false,
-        });
+        const createdReceipts = await this.informReceiptModel.insertMany(
+          receiptsToCreate,
+          {
+            ordered: false,
+          },
+        );
 
         this.logger.log(`成功创建了 ${createdReceipts.length} 条回执记录`);
       } catch (error) {
         // 提取写入错误的详细信息
         const writeErrors = error.writeErrors || [];
-        const duplicateKeyErrors = writeErrors.filter(err => err.code === 11000);
-        const otherErrors = writeErrors.filter(err => err.code !== 11000);
+        const duplicateKeyErrors = writeErrors.filter(
+          (err) => err.code === 11000,
+        );
+        const otherErrors = writeErrors.filter((err) => err.code !== 11000);
 
         this.logger.error(
           `创建通知 ${informDoc._id} 的回执时出错: ${error.message}`,
           {
             duplicateErrors: duplicateKeyErrors.length,
-            otherErrors: otherErrors.length
-          }
+            otherErrors: otherErrors.length,
+          },
         );
 
         // 如果全部失败，记录更严重的错误
         if (writeErrors.length === uniqueUserIds.length) {
-          this.logger.error(`严重错误: 通知 ${informDoc._id} 的所有回执创建均失败!`);
+          this.logger.error(
+            `严重错误: 通知 ${informDoc._id} 的所有回执创建均失败!`,
+          );
         }
 
         // 对于开发环境，可以记录更多详细信息
@@ -479,7 +488,7 @@ export class InformService {
     const fetchedReceipts = await this.informReceiptModel
       .find(findQuery)
       .populate({
-        path: 'inform',  // 使用新的字段名
+        path: 'inform', // 使用新的字段名
         model: 'Inform', // 直接使用字符串而不是Inform.name
         strictPopulate: false, // 添加此选项以允许更灵活的填充
         populate: {
@@ -534,7 +543,7 @@ export class InformService {
       });
     }
 
-    this.logger.debug('处理后的回执数据:', processedReceipts);
+    // this.logger.debug('处理后的回执数据:', processedReceipts);
 
     return {
       data: processedReceipts,
@@ -940,6 +949,46 @@ export class InformService {
   }
 
   /**
+   * 标记通知为未读
+   * @param receiptId 回执ID
+   * @param currentUser 当前用户
+   */
+  async markAsUnread(receiptId: string, currentUser: AuthenticatedUser) {
+    if (!Types.ObjectId.isValid(receiptId)) {
+      throw new BadRequestException('无效的回执ID格式');
+    }
+
+    const receipt = await this.informReceiptModel.findById(receiptId);
+
+    if (!receipt) {
+      throw new NotFoundException(`ID为"${receiptId}"的通知回执未找到`);
+    }
+
+    // 检查权限
+    if (
+      !transformObjectId(receipt.user).equals(
+        transformObjectId(currentUser._id),
+      )
+    ) {
+      throw new ForbiddenException('您没有权限操作此通知');
+    }
+
+    // 未读则不需要更新
+    if (!receipt.isRead) {
+      return receipt;
+    }
+
+    // 更新为未读
+    receipt.isRead = false;
+    receipt.readAt = undefined; // 清除已读时间
+    await receipt.save();
+
+    this.logger.log(`用户 ${currentUser._id} 已标记通知 ${receiptId} 为未读`);
+
+    return receipt;
+  }
+
+  /**
    * 删除用户的通知回执
    * @param receiptId 回执ID
    * @param currentUser 当前用户
@@ -969,5 +1018,25 @@ export class InformService {
     this.logger.log(`用户 ${currentUser._id} 已删除通知回执 ${receiptId}`);
 
     return true;
+  }
+
+  /**
+   * 获取用户的未读通知数量
+   * @param userId 用户ID
+   * @returns 未读通知数量
+   */
+  async getUnreadCountForUser(userId: Types.ObjectId): Promise<number> {
+    this.logger.debug(`获取用户 ${userId} 的未读通知数`);
+
+    const count = await this.informReceiptModel
+      .countDocuments({
+        user: userId,
+        isRead: false,
+      })
+      .exec();
+
+    this.logger.debug(`用户 ${userId} 的未读通知数: ${count}`);
+
+    return count;
   }
 }
