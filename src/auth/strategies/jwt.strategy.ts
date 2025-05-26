@@ -25,7 +25,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: any): Promise<AuthenticatedUser> {
     // 返回类型修改为 AuthenticatedUser
-    this.logger.debug('JWT payload:', payload);
+    // this.logger.debug('JWT payload:', payload);
 
     const userFromDb = await this.usersService.findOneById(payload.sub);
     if (!userFromDb) {
@@ -46,10 +46,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       permissions: payload.permissions || [], // 从 JWT payload 获取 permissions
     };
 
-    this.logger.debug(
-      'Authenticated user object constructed:',
-      authenticatedUser,
-    );
+    // this.logger.debug(
+    //   'Authenticated user object constructed:',
+    //   authenticatedUser,
+    // );
     return authenticatedUser;
   }
 }

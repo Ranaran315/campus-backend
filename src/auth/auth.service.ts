@@ -30,7 +30,6 @@ export class AuthService {
   }
 
   async login(user: any) {
-
     const roleNames: string[] = [];
     const permissionSet = new Set<string>();
 
@@ -40,7 +39,9 @@ export class AuthService {
           roleNames.push(role.name);
         }
         if (role && Array.isArray(role.permissions)) {
-          role.permissions.forEach(permission => permissionSet.add(permission));
+          role.permissions.forEach((permission) =>
+            permissionSet.add(permission),
+          );
         }
       });
     }
@@ -50,7 +51,7 @@ export class AuthService {
       username: user.username,
       sub: user._id,
       roles: roleNames,
-      permissions: uniquePermissions
+      permissions: uniquePermissions,
     };
 
     const returnUser = {
@@ -63,10 +64,10 @@ export class AuthService {
     };
 
     this.logger.log(`User ${user.username} logged in successfully.`); // 记录登录成功的日志
-    this.logger.debug(`JWT Payload: ${JSON.stringify(payload)}`);
-    this.logger.debug(`Return UserInfo: ${JSON.stringify(returnUser)}`);
+    // this.logger.debug(`JWT Payload: ${JSON.stringify(payload)}`);
+    // this.logger.debug(`Return UserInfo: ${JSON.stringify(returnUser)}`);
 
-    this.logger.debug(`Return UserInfo: ${returnUser.avatar}`);
+    // this.logger.debug(`Return UserInfo: ${returnUser.avatar}`);
 
     return {
       access_token: this.jwtService.sign(payload),

@@ -26,8 +26,6 @@ export class InformReceipt {
 export const InformReceiptSchema = SchemaFactory.createForClass(InformReceipt);
 
 // 复合唯一索引，确保同一用户对同一通知只有一条接收记录
-InformReceiptSchema.index({ informId: 1, userId: 1 }, { unique: true });
-
-// (可选) 为用户查询其通知列表时常用的字段添加索引
-InformReceiptSchema.index({ userId: 1, isRead: 1, receivedAt: -1 }); // 用于查询某用户未读/已读通知并按接收时间排序
-InformReceiptSchema.index({ userId: 1, isPinned: 1, receivedAt: -1 }); // 用于查询某用户置顶通知
+InformReceiptSchema.index({ inform: 1, user: 1 }, { unique: true });
+InformReceiptSchema.index({ user: 1, isRead: 1, receivedAt: -1 });
+InformReceiptSchema.index({ user: 1, isPinned: 1, receivedAt: -1 });

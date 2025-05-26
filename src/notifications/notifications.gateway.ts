@@ -52,7 +52,7 @@ export class NotificationsGateway
   @WebSocketServer()
   server: Server;
 
-  private readonly logger = new Logger('NotificationsGateway');
+  private readonly logger = new Logger(NotificationsGateway.name);
 
   // 存储用户ID和对应的socket连接
   private connectedUsers = new Map<string, string>(); // 目前仅支持一人一端
@@ -208,6 +208,9 @@ export class NotificationsGateway
     userId: string,
     data: NewInformNotificationData,
   ): boolean {
+    this.logger.debug(
+      `尝试向用户ID ${userId} 发送新通知 (ID: ${data.id}, Title: ${data.title})`,
+    );
     try {
       const socketId = this.connectedUsers.get(userId);
       if (socketId) {
