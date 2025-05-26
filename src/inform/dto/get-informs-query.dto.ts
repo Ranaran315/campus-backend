@@ -48,4 +48,8 @@ export class GetInformsQueryDto {
   @IsOptional()
   @IsEnum(SortOrderQuery)
   sortOrder?: SortOrderQuery = SortOrderQuery.DESC;
+
+  @IsOptional()
+  @IsString()
+  searchQuery?: string;
 }

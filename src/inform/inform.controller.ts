@@ -40,9 +40,7 @@ export class InformController {
     @Request() req,
     @Query() queryDto: GetInformsQueryDto,
   ): Promise<PaginatedResponse<PopulatedInformReceipt>> {
-    // Changed to PaginatedResponse<PopulatedInformReceipt>
     const user = req.user as AuthenticatedUser;
-    // Convert string userId to Types.ObjectId before calling the service
     const userIdAsObjectId = new Types.ObjectId(user.id);
     return this.informService.getInformsForUser(userIdAsObjectId, queryDto);
   }

@@ -428,6 +428,7 @@ export class InformService {
       importance,
       sortBy,
       sortOrder,
+      searchQuery, // 提取搜索查询参数
     } = queryDto;
 
     const findQuery: any = { user: userId };
@@ -436,10 +437,77 @@ export class InformService {
       findQuery.isRead = status === InformStatusQuery.READ;
     }
 
+    // 处理搜索查询
+    if (searchQuery && searchQuery.trim() !== '') {
+      // 1. 先在 Inform 集合中搜索匹配的通知
+      const searchRegex = { $regex: searchQuery, $options: 'i' };
+      const matchingInforms = await this.informModel
+        .find({
+          $or: [
+            { title: searchRegex }, // 搜索标题
+            { content: searchRegex }, // 搜索内容
+            { tags: searchRegex }, // 搜索标签
+          ],
+        })
+        .select('_id')
+        .lean()
+        .exec();
+
+      const matchingInformIds = matchingInforms.map(
+        (inform) => inform._id as Types.ObjectId,
+      );
+
+      if (matchingInformIds.length === 0) {
+        // 没有找到匹配的通知，返回空结果
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPrevPage: false,
+        };
+      }
+
+      // 2. 将匹配的通知ID添加到回执查询条件中
+      if (findQuery.inform) {
+        // 如果已经有 inform 条件（如importance筛选），取交集
+        const existingInformIds = findQuery.inform.$in;
+        const intersectedIds = matchingInformIds.filter((id) =>
+          existingInformIds.some((existingId) => existingId.equals(id)),
+        );
+
+        if (intersectedIds.length === 0) {
+          // 交集为空，返回空结果
+          return {
+            data: [],
+            total: 0,
+            page,
+            limit,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPrevPage: false,
+          };
+        }
+
+        findQuery.inform.$in = intersectedIds;
+      } else {
+        // 如果还没有 inform 条件，直接添加
+        findQuery.inform = { $in: matchingInformIds };
+      }
+    }
+
     if (importance) {
-      // Find informs that match the importance
+      const searchRegex = { $regex: searchQuery, $options: 'i' };
       const informsMatchingImportance = await this.informModel
-        .find({ importance })
+        .find({
+          $or: [
+            { title: searchRegex }, // 搜索标题
+            { content: searchRegex }, // 搜索内容
+            { tags: searchRegex }, // 搜索标签
+          ],
+        })
         .select('_id')
         .lean()
         .exec();
