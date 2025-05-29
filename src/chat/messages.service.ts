@@ -9,12 +9,14 @@ import { Message, MessageDocument } from './schemas/message.schema';
 import { ConversationService } from './conversation.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { transformObjectId } from 'src/utils/transform';
+import { ChatGateway } from './chat.gateway';
 
 @Injectable()
 export class MessageService {
   constructor(
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
     private conversationService: ConversationService,
+    private chatGateway: ChatGateway,
   ) {}
 
   // 创建新消息
@@ -23,42 +25,38 @@ export class MessageService {
     messageDto: CreateMessageDto,
   ) {
     const senderIdObj = new Types.ObjectId(senderId);
-    let conversationId = messageDto.conversationId;
+    let conversationObjectId: Types.ObjectId;
 
     // 如果没有提供会话ID，则创建或获取会话
-    if (!conversationId) {
-      if (messageDto.receiver) {
-        // 私聊
-        const conversation =
-          await this.conversationService.getOrCreatePrivateConversation(
-            senderId,
-            messageDto.receiver,
-          );
-        // @ts-ignore
-        conversationId = transformObjectId(conversation._id);
-      } else if (messageDto.group) {
-        // 群聊
-        const conversation =
-          await this.conversationService.getOrCreateGroupConversation(
-            messageDto.group,
-          );
-        // @ts-ignore
-        conversationId = transformObjectId(conversation._id);
-      } else {
-        throw new BadRequestException('必须提供会话ID、接收者ID或群组ID');
-      }
+    if (messageDto.conversationId) {
+      conversationObjectId = new Types.ObjectId(messageDto.conversationId);
+    } else if (messageDto.receiver) {
+      // 私聊
+      const conversation = await this.conversationService.getOrCreatePrivateConversation(
+        senderId,
+        messageDto.receiver,
+      );
+      conversationObjectId = conversation._id as Types.ObjectId;
+    } else if (messageDto.group) {
+      // 群聊
+      const conversation = await this.conversationService.getOrCreateGroupConversation(
+        messageDto.group,
+      );
+      conversationObjectId = conversation._id as Types.ObjectId;
+    } else {
+      throw new BadRequestException('必须提供会话ID、接收者ID或群组ID');
     }
 
     // 创建消息记录
     const newMessage = new this.messageModel({
       sender: senderIdObj,
-      conversation: conversationId, // 修改 conversationId -> conversation
+      conversation: conversationObjectId, // 使用 conversationObjectId
       receiver: messageDto.receiver
         ? new Types.ObjectId(messageDto.receiver)
         : undefined,
       group: messageDto.group
         ? new Types.ObjectId(messageDto.group)
-        : undefined, // 修改 groupId -> group
+        : undefined,
       type: messageDto.type,
       content: messageDto.content,
       attachments: messageDto.attachments,
@@ -70,24 +68,29 @@ export class MessageService {
 
     // 更新会话最后活动时间和最后消息
     await this.conversationService.updateConversationActivity(
-      conversationId,
-      // @ts-ignore
-      savedMessage._id,
+      conversationObjectId,
+      savedMessage._id as Types.ObjectId,
     );
 
     // 获取会话详情以增加所有其他参与者的未读计数
-    const conversation =
-      await this.conversationService.getConversationById(conversationId);
-    const otherParticipants = conversation.participants.filter(
+    const conversationDetails = await this.conversationService.getConversationById(conversationObjectId);
+    const otherParticipants = conversationDetails.participants.filter(
       (p) => !p.equals(senderIdObj),
     );
 
     // 更新所有其他参与者的未读计数
     await Promise.all(
       otherParticipants.map((userId) =>
-        this.conversationService.incrementUnreadCount(conversationId, userId),
+        this.conversationService.incrementUnreadCount(conversationObjectId, userId),
       ),
     );
+
+    // 将消息通过 WebSocket 推送给相关客户端
+    if (savedMessage.receiver) { // 私聊
+      this.chatGateway.sendMessageToUser(savedMessage.receiver.toString(), savedMessage);
+    } else if (savedMessage.group) { // 群聊
+      this.chatGateway.broadcastMessageToGroup(savedMessage.group.toString(), savedMessage);
+    }
 
     return savedMessage;
   }
@@ -99,7 +102,7 @@ export class MessageService {
     before?: Date | string,
   ) {
     const query: any = {
-      conversation: conversationId, // 修改 conversationId -> conversation
+      conversation: new Types.ObjectId(conversationId), // 使用 conversation
       isDeleted: { $ne: true },
     };
 
@@ -125,7 +128,7 @@ export class MessageService {
 
     // 查找该会话中未被当前用户阅读的所有消息
     const messages = await this.messageModel.find({
-      conversation: conversationId, // 修改 conversationId -> conversation
+      conversation: new Types.ObjectId(conversationId), // 使用 conversation
       readBy: { $ne: userIdObj },
       isDeleted: { $ne: true },
     });
@@ -168,7 +171,7 @@ export class MessageService {
   // 获取用户的未读消息总数
   async getUnreadMessagesCount(userId: string | Types.ObjectId) {
     const settings = await this.conversationService['settingModel'].find({
-      user: userId, // 修改 userId -> user
+      user: new Types.ObjectId(userId), // 确保使用 user 字段
       isVisible: true,
     });
 

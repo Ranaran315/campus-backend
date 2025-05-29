@@ -59,7 +59,7 @@ export class GroupService {
     const newConversation = new this.conversationModel({
       type: 'group',
       participants: savedGroup.members,
-      group: savedGroup._id, // 修改 groupId -> group
+      group: savedGroup._id, // 使用 group 字段
       lastActivityAt: new Date(),
     });
 
@@ -69,8 +69,8 @@ export class GroupService {
     await Promise.all(
       savedGroup.members.map((memberId) =>
         this.settingModel.create({
-          user: memberId, // 修改 userId -> user
-          conversation: savedConversation._id, // 修改 conversationId -> conversation
+          user: memberId, // 使用 user 字段
+          conversation: savedConversation._id, // 使用 conversation 字段
           isVisible: true,
         }),
       ),
@@ -149,16 +149,16 @@ export class GroupService {
 
     // 更新会话参与者
     const conversation = await this.conversationModel.findOne({
-      group: groupId,
-    }); // 修改 groupId -> group
+      group: new Types.ObjectId(groupId), // 使用 group 字段
+    });
     if (conversation) {
       conversation.participants.push(memberIdObj);
       await conversation.save();
 
       // 为新成员创建会话设置
       await this.settingModel.create({
-        user: memberIdObj, // 修改 userId -> user
-        conversation: conversation._id, // 修改 conversationId -> conversation
+        user: memberIdObj, // 使用 user 字段
+        conversation: conversation._id, // 使用 conversation 字段
         isVisible: true,
       });
     }
@@ -207,8 +207,8 @@ export class GroupService {
 
     // 更新会话参与者
     const conversation = await this.conversationModel.findOne({
-      group: groupId,
-    }); // 修改 groupId -> group
+      group: new Types.ObjectId(groupId), // 使用 group 字段
+    });
     if (conversation) {
       conversation.participants = conversation.participants.filter(
         (id) => !id.equals(memberIdObj),
@@ -217,7 +217,7 @@ export class GroupService {
 
       // 隐藏该成员的会话
       await this.settingModel.findOneAndUpdate(
-        { user: memberIdObj, conversation: conversation._id }, // 修改字段名
+        { user: memberIdObj, conversation: conversation._id }, // 使用 user 和 conversation 字段
         { isVisible: false },
       );
     }
@@ -285,7 +285,7 @@ export class GroupService {
 
     // 软删除对应的会话
     await this.conversationModel.findOneAndUpdate(
-      { group: groupId }, // 修改 groupId -> group
+      { group: new Types.ObjectId(groupId) }, // 使用 group 字段
       { isDeleted: true },
     );
 

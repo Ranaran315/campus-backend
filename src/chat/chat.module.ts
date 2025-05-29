@@ -15,6 +15,7 @@ import { ConversationService } from './conversation.service';
 import { GroupService } from './group.service';
 import { ChatController } from './chat.controller';
 import { UsersModule } from '../users/users.module';
+import { ChatGateway } from './chat.gateway';
 
 @Module({
   imports: [
@@ -29,7 +30,7 @@ import { UsersModule } from '../users/users.module';
     ]),
     UsersModule, // 引入用户模块以访问用户服务
   ],
-  providers: [MessageService, ConversationService, GroupService],
+  providers: [MessageService, ConversationService, GroupService, ChatGateway],
   controllers: [ChatController],
   exports: [MessageService, ConversationService, GroupService],
 })

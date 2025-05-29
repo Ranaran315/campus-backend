@@ -44,8 +44,8 @@ export class ConversationService {
     const conversationIds = conversations.map((c) => c._id);
     const settings = await this.settingModel
       .find({
-        user: userIdObj, // 假设修改了 userId -> user
-        conversation: { $in: conversationIds }, // 假设修改了 conversationId -> conversation
+        user: userIdObj, // 确保使用 user 字段
+        conversation: { $in: conversationIds }, // 确保使用 conversation 字段
       })
       .lean()
       .exec();
@@ -112,13 +112,13 @@ export class ConversationService {
     // 为两个用户创建会话设置
     await Promise.all([
       this.settingModel.create({
-        user: id1, // 修改 userId -> user
-        conversation: savedConversation._id, // 修改 conversationId -> conversation
+        user: id1, // 确保使用 user 字段
+        conversation: savedConversation._id, // 确保使用 conversation 字段
         isVisible: true,
       }),
       this.settingModel.create({
-        user: id2, // 修改 userId -> user
-        conversation: savedConversation._id, // 修改 conversationId -> conversation
+        user: id2, // 确保使用 user 字段
+        conversation: savedConversation._id, // 确保使用 conversation 字段
         isVisible: true,
       }),
     ]);
@@ -134,7 +134,7 @@ export class ConversationService {
     const existingConversation = await this.conversationModel
       .findOne({
         type: 'group',
-        group: groupIdObj, // 假设修改了 groupId -> group
+        group: groupIdObj, // 确保使用 group 字段
         isDeleted: { $ne: true },
       })
       .exec();
@@ -146,7 +146,7 @@ export class ConversationService {
     // 创建新的群聊会话
     const newConversation = new this.conversationModel({
       type: 'group',
-      group: groupIdObj, // 修改 groupId -> group
+      group: groupIdObj, // 确保使用 group 字段
       participants: [], // 会在GroupService中更新成员
       lastActivityAt: new Date(),
     });
@@ -171,7 +171,7 @@ export class ConversationService {
     userId: string | Types.ObjectId,
   ) {
     await this.settingModel.findOneAndUpdate(
-      { conversation: conversationId, user: userId }, // 修改字段名
+      { conversation: new Types.ObjectId(conversationId), user: new Types.ObjectId(userId) }, // 使用 user 和 conversation
       { $inc: { unreadCount: 1 } },
       { upsert: true },
     );
@@ -183,7 +183,7 @@ export class ConversationService {
     userId: string | Types.ObjectId,
   ) {
     await this.settingModel.findOneAndUpdate(
-      { conversation: conversationId, user: userId }, // 修改字段名
+      { conversation: new Types.ObjectId(conversationId), user: new Types.ObjectId(userId) }, // 使用 user 和 conversation
       { unreadCount: 0 },
       { upsert: true },
     );
@@ -210,7 +210,7 @@ export class ConversationService {
     isPinned: boolean,
   ) {
     return this.settingModel.findOneAndUpdate(
-      { user: userId, conversation: conversationId }, // 修改字段名
+      { user: new Types.ObjectId(userId), conversation: new Types.ObjectId(conversationId) }, // 使用 user 和 conversation
       { isPinned },
       { upsert: true, new: true },
     );
@@ -222,9 +222,27 @@ export class ConversationService {
     conversationId: string | Types.ObjectId,
   ) {
     return this.settingModel.findOneAndUpdate(
-      { user: userId, conversation: conversationId }, // 修改字段名
+      { user: new Types.ObjectId(userId), conversation: new Types.ObjectId(conversationId) }, // 使用 user 和 conversation
       { isVisible: false },
       { upsert: true, new: true },
     );
+  }
+
+  // 获取用户参与的所有群聊ID
+  async getUserGroupIds(userId: string | Types.ObjectId): Promise<string[]> {
+    const userIdObj = new Types.ObjectId(userId);
+    const groupConversations = await this.conversationModel
+      .find({
+        participants: userIdObj,
+        type: 'group',
+        isDeleted: { $ne: true },
+      })
+      .select('group') // 只需要 group 字段，其中包含群组ID
+      .lean()
+      .exec();
+
+    return groupConversations
+      .map(conv => conv.group?.toString()) // 获取群组ID并转换为字符串
+      .filter((groupId): groupId is string => !!groupId); // 使用类型守卫确保过滤后是 string[]
   }
 }

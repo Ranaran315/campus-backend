@@ -21,6 +21,7 @@ import { ConversationService } from './conversation.service';
 import { GroupService } from './group.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { CreateGroupDto } from './dto/create-group.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
 import { AuthenticatedUser } from '../auth/types';
 import { Types } from 'mongoose';
 import { transformObjectId } from '../utils/transform';
@@ -238,11 +239,7 @@ export class ChatController {
   async updateGroup(
     @Request() req,
     @Param('id') groupId: string,
-    @Body() updateData: {
-      name?: string;
-      description?: string;
-      avatar?: string;
-    }
+    @Body() updateData: UpdateGroupDto,
   ) {
     const user = req.user as AuthenticatedUser;
     const group = await this.groupService.getGroupById(groupId);
