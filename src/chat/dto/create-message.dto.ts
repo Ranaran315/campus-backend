@@ -42,11 +42,11 @@ export class CreateMessageDto {
   
   @IsMongoId()
   @IsOptional()
-  receiverId?: string; // 新私聊接收者ID
+  receiver?: string; // 新私聊接收者ID
   
   @IsMongoId()
   @IsOptional()
-  groupId?: string; // 群组ID
+  group?: string; // 群组ID
   
   @IsArray()
   @ValidateNested({ each: true })
