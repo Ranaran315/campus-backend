@@ -20,7 +20,7 @@ export class ConversationService {
     // 查找用户参与的所有会话
     const conversations = await this.conversationModel.find({
       participants: userIdObj,
-      isDeleted: false,
+      isDeleted: { $ne: true },
     })
     .populate('lastMessage')
     .sort({ lastActivityAt: -1 })
@@ -30,23 +30,23 @@ export class ConversationService {
     // 获取用户对这些会话的个人设置
     const conversationIds = conversations.map(c => c._id);
     const settings = await this.settingModel.find({
-      userId: userIdObj,
-      conversationId: { $in: conversationIds },
+      user: userIdObj, // 假设修改了 userId -> user
+      conversation: { $in: conversationIds }, // 假设修改了 conversationId -> conversation
     }).lean().exec();
     
     // 合并会话信息与个人设置
-    const settingsMap = new Map(settings.map(s => [s.conversationId.toString(), s]));
+    const settingsMap = new Map(settings.map(s => [s.conversation.toString(), s]));
     
     const result = conversations
       .map(conv => {
-        const setting = settingsMap.get(conv._id.toString()) || {};
+        const setting = settingsMap.get(conv._id.toString());
         return {
           ...conv,
-          isPinned: setting.isPinned || false,
-          isVisible: setting.isVisible !== false, // 默认可见
-          unreadCount: setting.unreadCount || 0,
-          isMuted: setting.isMuted || false,
-          customName: setting.nickname,
+          isPinned: setting?.isPinned || false,
+          isVisible: setting?.isVisible !== false, // 默认可见
+          unreadCount: setting?.unreadCount || 0,
+          isMuted: setting?.isMuted || false,
+          customName: setting?.nickname,
         };
       })
       // 过滤掉用户设置为不可见的会话
@@ -70,7 +70,7 @@ export class ConversationService {
     const existingConversation = await this.conversationModel.findOne({
       type: 'private',
       participants: { $all: [id1, id2], $size: 2 },
-      isDeleted: false,
+      isDeleted: { $ne: true },
     }).exec();
     
     if (existingConversation) {
@@ -89,13 +89,13 @@ export class ConversationService {
     // 为两个用户创建会话设置
     await Promise.all([
       this.settingModel.create({
-        userId: id1,
-        conversationId: savedConversation._id,
+        user: id1, // 修改 userId -> user
+        conversation: savedConversation._id, // 修改 conversationId -> conversation
         isVisible: true,
       }),
       this.settingModel.create({
-        userId: id2,
-        conversationId: savedConversation._id,
+        user: id2, // 修改 userId -> user
+        conversation: savedConversation._id, // 修改 conversationId -> conversation
         isVisible: true,
       }),
     ]);
@@ -110,19 +110,18 @@ export class ConversationService {
     // 查询是否已存在该群的会话
     const existingConversation = await this.conversationModel.findOne({
       type: 'group',
-      groupId: groupIdObj,
-      isDeleted: false,
+      group: groupIdObj, // 假设修改了 groupId -> group
+      isDeleted: { $ne: true },
     }).exec();
     
     if (existingConversation) {
       return existingConversation;
     }
     
-    // 创建新的群聊会话 (需要从GroupService获取成员列表)
-    // 此处可以注入GroupService，这里简化处理
+    // 创建新的群聊会话
     const newConversation = new this.conversationModel({
       type: 'group',
-      groupId: groupIdObj,
+      group: groupIdObj, // 修改 groupId -> group
       participants: [], // 会在GroupService中更新成员
       lastActivityAt: new Date(),
     });
@@ -144,7 +143,7 @@ export class ConversationService {
   // 增加用户的未读消息计数
   async incrementUnreadCount(conversationId: string | Types.ObjectId, userId: string | Types.ObjectId) {
     await this.settingModel.findOneAndUpdate(
-      { conversationId, userId },
+      { conversation: conversationId, user: userId }, // 修改字段名
       { $inc: { unreadCount: 1 } },
       { upsert: true }
     );
@@ -153,7 +152,7 @@ export class ConversationService {
   // 重置未读计数（用户阅读会话时）
   async resetUnreadCount(conversationId: string | Types.ObjectId, userId: string | Types.ObjectId) {
     await this.settingModel.findOneAndUpdate(
-      { conversationId, userId },
+      { conversation: conversationId, user: userId }, // 修改字段名
       { unreadCount: 0 },
       { upsert: true }
     );
@@ -175,7 +174,7 @@ export class ConversationService {
   // 设置会话是否置顶
   async pinConversation(userId: string | Types.ObjectId, conversationId: string | Types.ObjectId, isPinned: boolean) {
     return this.settingModel.findOneAndUpdate(
-      { userId, conversationId },
+      { user: userId, conversation: conversationId }, // 修改字段名
       { isPinned },
       { upsert: true, new: true }
     );
@@ -184,7 +183,7 @@ export class ConversationService {
   // 从会话列表中隐藏会话（不删除实际数据）
   async hideConversation(userId: string | Types.ObjectId, conversationId: string | Types.ObjectId) {
     return this.settingModel.findOneAndUpdate(
-      { userId, conversationId },
+      { user: userId, conversation: conversationId }, // 修改字段名
       { isVisible: false },
       { upsert: true, new: true }
     );

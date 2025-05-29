@@ -5,6 +5,7 @@ import { Message, MessageDocument } from './schemas/message.schema';
 import { ConversationService } from './conversation.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { transformObjectId } from 'src/utils/transform';
+import { ConversationDocument } from './schemas/conversation.schema';
 
 @Injectable()
 export class MessageService {
@@ -26,13 +27,15 @@ export class MessageService {
           senderId,
           messageDto.receiverId
         );
+        // @ts-ignore
         conversationId = transformObjectId(conversation._id);
       } else if (messageDto.groupId) {
         // 群聊
         const conversation = await this.conversationService.getOrCreateGroupConversation(
           messageDto.groupId
         );
-        conversationId = conversation._id.toString();
+        // @ts-ignore
+        conversationId = transformObjectId(conversation._id);
       } else {
         throw new BadRequestException('必须提供会话ID、接收者ID或群组ID');
       }
@@ -41,9 +44,9 @@ export class MessageService {
     // 创建消息记录
     const newMessage = new this.messageModel({
       sender: senderIdObj,
-      conversationId,
+      conversation: conversationId, // 修改 conversationId -> conversation
       receiver: messageDto.receiverId ? new Types.ObjectId(messageDto.receiverId) : undefined,
-      groupId: messageDto.groupId ? new Types.ObjectId(messageDto.groupId) : undefined,
+      group: messageDto.groupId ? new Types.ObjectId(messageDto.groupId) : undefined, // 修改 groupId -> group
       type: messageDto.type,
       content: messageDto.content,
       attachments: messageDto.attachments,
@@ -81,7 +84,10 @@ export class MessageService {
     limit = 20,
     before?: Date | string,
   ) {
-    const query: any = { conversationId, isDeleted: false };
+    const query: any = { 
+      conversation: conversationId, // 修改 conversationId -> conversation
+      isDeleted: { $ne: true }
+    };
     
     if (before) {
       const beforeDate = typeof before === 'string' ? new Date(before) : before;
@@ -104,9 +110,9 @@ export class MessageService {
     
     // 查找该会话中未被当前用户阅读的所有消息
     const messages = await this.messageModel.find({
-      conversationId,
+      conversation: conversationId, // 修改 conversationId -> conversation
       readBy: { $ne: userIdObj },
-      isDeleted: false,
+      isDeleted: { $ne: true },
     });
     
     // 为每条消息添加当前用户到已读列表
@@ -145,7 +151,7 @@ export class MessageService {
   // 获取用户的未读消息总数
   async getUnreadMessagesCount(userId: string | Types.ObjectId) {
     const settings = await this.conversationService['settingModel'].find({
-      userId,
+      user: userId, // 修改 userId -> user
       isVisible: true,
     });
     
