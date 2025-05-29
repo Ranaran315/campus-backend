@@ -13,6 +13,8 @@ import {
   Request,
   Query,
   BadRequestException,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -23,6 +25,12 @@ import {
 } from './dto/update-user.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Types } from 'mongoose';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  getGeneralMulterStorage,
+  getUserMulterStorage,
+  UserFileInterceptor,
+} from 'src/utils/local-upload';
 
 // 在 main.ts 中启用全局管道，或者在这里为特定控制器/路由启用
 // @UsePipes(new ValidationPipe(...))
@@ -115,5 +123,47 @@ export class UsersController {
   remove(@Param('id') id: string) {
     // Service 中已处理 Not Found 异常
     return this.usersService.remove(id); // 注意 remove 方法现在返回 void
+  }
+
+  /**
+   * 上传或更新用户头像
+   * @route POST /users/me/avatar
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('me/avatar')
+  @UseInterceptors(
+    UserFileInterceptor('avatar', 'avatars', {
+      limits: { fileSize: 5 * 1024 * 1024 }, // 限制5MB
+      fileFilter: (_req, file, cb) => {
+        // 只允许上传图片
+        if (!file.mimetype.match(/^image\/(jpeg|png|gif|webp|jpg)$/)) {
+          return cb(new BadRequestException('只允许上传图片文件'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadAvatar(
+    @Request() req,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('请提供头像文件');
+    }
+
+    const userId = req.user._id;
+    const avatarUrl = `/uploads/avatars/${userId}/${file.filename}`;
+
+    // 调用服务更新用户头像字段
+    await this.usersService.updateAvatar(userId, avatarUrl);
+
+    return {
+      success: true,
+      avatar: avatarUrl,
+      filename: file.filename,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+    };
   }
 }

@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { User } from '../../users/schemas/user.schema'; // 确保路径正确
+import { UploadFile } from 'src/types/upload-file';
 
 export type InformDocument = Inform & Document;
 
@@ -17,10 +18,9 @@ export class Inform {
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   sender: Types.ObjectId;
-
   @Prop({
     type: String,
-    required: true,
+    required: false,
     enum: [
       'ALL',
       'ROLE',
@@ -33,7 +33,7 @@ export class Inform {
       'SENDER_COLLEGE_STUDENTS',
     ],
   })
-  targetScope: string;
+  targetScope?: string;
 
   @Prop({ type: [String], default: [] })
   targetUsers: string[];
@@ -79,12 +79,7 @@ export class Inform {
     ],
     default: [],
   })
-  attachments: {
-    fileName: string;
-    url: string;
-    size?: number;
-    mimeType?: string;
-  }[];
+  attachments: UploadFile[];
 
   @Prop({ default: () => new Date() })
   publishAt: Date;

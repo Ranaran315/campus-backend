@@ -19,6 +19,7 @@ import {
   InformCommentDocument,
 } from './schemas/inform-comment.schema';
 import { CreateInformDto } from './dto/create-inform.dto';
+import { PublishInformDto } from './dto/publish-inform.dto';
 import { UsersService } from '../users/users.service';
 import { CollegeService } from '../college/college.service';
 import { MajorService } from '../major/major.service';
@@ -104,11 +105,11 @@ export class InformService {
     );
     return savedInform;
   }
-
   // --- 发布通知 ---
   async publish(
     informId: string,
     publisherAuth: AuthenticatedUser,
+    publishDto?: PublishInformDto,
   ): Promise<InformDocument> {
     // 查找发布人
     const publisherDoc = await this.usersService.findOneById(publisherAuth._id);
@@ -148,6 +149,55 @@ export class InformService {
       )
     ) {
       throw new BadRequestException('您没有权限发布此通知草稿。');
+    } // 更新通知数据：将前端提供的信息应用到通知中
+    if (publishDto) {
+      // 更新目标范围信息
+      if (publishDto.targetScope) {
+        informToPublish.targetScope = publishDto.targetScope;
+      }
+      if (publishDto.targetUsers) {
+        informToPublish.targetUsers = publishDto.targetUsers;
+      }
+      if (publishDto.userTypeFilter) {
+        informToPublish.userTypeFilter = publishDto.userTypeFilter;
+      }
+
+      // 更新其他通知内容字段
+      if (publishDto.title !== undefined) {
+        informToPublish.title = publishDto.title;
+      }
+      if (publishDto.content !== undefined) {
+        informToPublish.content = publishDto.content;
+      }
+      if (publishDto.description !== undefined) {
+        informToPublish.description = publishDto.description;
+      }
+      if (publishDto.importance !== undefined) {
+        informToPublish.importance = publishDto.importance;
+      }
+      if (publishDto.tags !== undefined) {
+        informToPublish.tags = publishDto.tags;
+      }
+      if (publishDto.allowReplies !== undefined) {
+        informToPublish.allowReplies = publishDto.allowReplies;
+      }
+      if (publishDto.attachments !== undefined) {
+        informToPublish.attachments = publishDto.attachments;
+      }
+      if (publishDto.deadline !== undefined) {
+        informToPublish.deadline = publishDto.deadline
+          ? new Date(publishDto.deadline)
+          : undefined;
+      }
+      if (publishDto.isPublic !== undefined) {
+        informToPublish.isPublic = publishDto.isPublic;
+      }
+      if (publishDto.trackReadStatus !== undefined) {
+        informToPublish.trackReadStatus = publishDto.trackReadStatus;
+      }
+      if (publishDto.requireConfirm !== undefined) {
+        informToPublish.requireConfirm = publishDto.requireConfirm;
+      }
     }
 
     // 更新状态和发布时间

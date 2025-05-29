@@ -10,9 +10,12 @@ import {
   HttpCode,
   HttpStatus,
   Delete,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { InformService, PopulatedInformReceipt } from './inform.service'; // Import PopulatedInformReceipt
 import { CreateInformDto } from './dto/create-inform.dto';
+import { PublishInformDto } from './dto/publish-inform.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { Permissions } from '../auth/decorators/permissions.decorator';
@@ -22,6 +25,12 @@ import { Types } from 'mongoose'; // Import Types
 import { GetMyCreatedInformsDto } from './dto/get-my-created-informs.dto'; // Import the new DTO
 import { InformDocument } from './schemas/inform.schema';
 import { AuthenticatedRequest, AuthenticatedUser } from 'src/auth/types';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  getGeneralMulterStorage,
+  getUserMulterStorage,
+  UserFileInterceptor,
+} from '../utils/local-upload';
 
 @Controller('informs')
 @UseGuards(JwtAuthGuard) // 对所有 informs 路由启用 JWT 认证
@@ -50,27 +59,30 @@ export class InformController {
    * @route POST /informs/draft
    */
   @Post('draft')
-  @UseGuards(PermissionsGuard)
-  @Permissions('inform:create')
+  // @UseGuards(PermissionsGuard)
+  // @Permissions('inform:create')
   @HttpCode(HttpStatus.CREATED)
   async createDraft(@Body() createInformDto: CreateInformDto, @Request() req) {
     const sender = req.user as AuthenticatedUser;
     // InformService 的 create 方法现在默认就是创建草稿
     return this.informService.create(createInformDto, sender);
   }
-
   /**
    * @description 发布一个已存在的草稿通知
    * @route POST /informs/:id/publish
    * @param id Inform 文档的 ID
    */
   @Post(':id/publish')
-  @UseGuards(PermissionsGuard)
-  @Permissions('inform:create')
+  // @UseGuards(PermissionsGuard)
+  // @Permissions('inform:create')
   @HttpCode(HttpStatus.OK)
-  async publishDraft(@Param('id') informId: string, @Request() req) {
+  async publishDraft(
+    @Param('id') informId: string,
+    @Body() publishInformDto: PublishInformDto,
+    @Request() req,
+  ) {
     const publisher = req.user as AuthenticatedUser;
-    return this.informService.publish(informId, publisher);
+    return this.informService.publish(informId, publisher, publishInformDto);
   }
 
   /**
@@ -78,7 +90,7 @@ export class InformController {
    * @route GET /informs/my-created
    */
   @Get('my-created')
-  @UseGuards(PermissionsGuard)
+  // @UseGuards(PermissionsGuard)
   @HttpCode(HttpStatus.OK)
   async getMyCreatedInforms(
     @Request() req,
@@ -159,8 +171,8 @@ export class InformController {
    * @param id Inform 文档的 ID
    */
   @Post(':id/archive')
-  @UseGuards(PermissionsGuard)
-  @Permissions('inform:archive')
+  // @UseGuards(PermissionsGuard)
+  // @Permissions('inform:archive')
   @HttpCode(HttpStatus.OK)
   async archivePublishedInform(@Param('id') informId: string, @Request() req) {
     const currentUser = req.user as AuthenticatedUser;
@@ -249,5 +261,41 @@ export class InformController {
     const count = await this.informService.getUnreadCountForUser(userId);
 
     return { count };
+  }
+
+  /**
+   * @description 通知附件上传（按用户ID分目录存储）
+   * @route POST /informs/upload-attachment
+   * @returns { url, filename, originalname, mimetype, size }
+   */
+  @Post('upload-attachment')
+  @UseInterceptors(
+    UserFileInterceptor('file', 'inform-attachments', {
+      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+      fileFilter: (_req, file, cb) => {
+        // 可根据需要限制类型
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadInformAttachment(
+    @Request() req,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      return { success: false, message: '未检测到上传文件' };
+    }
+
+    const userId = req.user._id.toString();
+    const url = `/uploads/inform-attachments/${userId}/${file.filename}`;
+
+    return {
+      success: true,
+      url,
+      filename: file.filename,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+    };
   }
 }

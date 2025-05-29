@@ -24,11 +24,14 @@ class InformAttachmentDto {
   url: string; // 通常是上传后得到的 URL
 
   @IsOptional()
-  @IsString()
-  mimeType?: string;
+  size?: number;
 
   @IsOptional()
-  size?: number;
+  @IsString()
+  mimetype?: string;
+
+  @IsOptional()
+  status?: string;
 }
 
 export class CreateInformDto {
@@ -57,7 +60,8 @@ export class CreateInformDto {
     'SENDER_MANAGED_CLASSES',
     'SENDER_COLLEGE_STUDENTS',
   ])
-  targetScope: string;
+  @IsOptional()
+  targetScope?: string;
 
   @IsArray()
   @IsMongoId({ each: true })

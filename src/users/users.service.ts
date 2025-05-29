@@ -825,4 +825,27 @@ export class UsersService {
   async findUsersByIds(userIds: Types.ObjectId[]): Promise<UserDocument[]> {
     return this.userModel.find({ _id: { $in: userIds } }).exec();
   }
+
+  /**
+   * 更新用户头像
+   * @param userId 用户ID
+   * @param avatarUrl 新头像的URL
+   */
+  async updateAvatar(userId: string, avatarUrl: string): Promise<UserDocument> {
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('无效的用户ID格式');
+    }
+
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException(`ID为"${userId}"的用户不存在`);
+    }
+
+    user.avatar = avatarUrl;
+    await user.save();
+
+    this.logger.log(`用户 ${userId} 更新了头像: ${avatarUrl}`);
+
+    return user;
+  }
 }
