@@ -2,17 +2,17 @@ import { existsSync, mkdirSync } from 'fs';
 import { diskStorage } from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { extname, join } from 'path';
-import { transformIdToString } from './transform';
+// import { transformIdToString } from './transform'; // transformIdToString might no longer be needed if userId is expected as string or ObjectId
 
 /**
  * 增强版通用本地上传存储工厂 - 支持用户级别目录
  * @param type 业务类型，如 avatar/chat/inform-attachments/images 等
- * @param options 额外选项，如用户ID
+ * @param options 额外选项，如用户ID (期望是string或具有toString方法的对象)
  * @returns Multer diskStorage 配置
  */
 export function getUserMulterStorage(
   type: string,
-  options?: { userId?: string },
+  options?: { userId?: string | { toString: () => string } }, // More specific type for userId
 ) {
   // 验证业务类型
   const safeType = type && /^[\w-]+$/.test(type) ? type : 'other';
@@ -22,12 +22,24 @@ export function getUserMulterStorage(
 
   // 如果提供了userId，则在路径中添加用户ID目录
   if (options?.userId) {
-    const safeUserId = transformIdToString(options.userId).replace(
-      /[^a-zA-Z0-9-_]/g,
-      '',
-    ); // 安全处理用户ID
-    if (safeUserId) {
-      basePath = join(basePath, safeUserId);
+    const userIdStr = typeof options.userId === 'string' ? options.userId : options.userId.toString();
+    let directoryName = '';
+
+    if (/^[a-f0-9]{24}$/i.test(userIdStr)) { // 标准 MongoDB ObjectId 字符串 (24位十六进制)
+      directoryName = userIdStr;
+    } else {
+      // 对于非标准 ObjectId 字符串，进行清理
+      // console.warn(`User ID '${userIdStr}' is not a standard ObjectId. Applying sanitization.`); // 可选日志
+      const sanitized = userIdStr.replace(/[^a-zA-Z0-9-_]/g, '');
+      if (sanitized) {
+        directoryName = sanitized;
+      } else {
+        // console.warn(`User ID '${userIdStr}' sanitized to an empty string. Not creating user-specific directory.`); // 可选日志
+      }
+    }
+
+    if (directoryName) {
+      basePath = join(basePath, directoryName);
     }
   }
 
