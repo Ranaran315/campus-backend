@@ -108,6 +108,7 @@ export class ChatController {
     
     return this.messageService.getConversationMessages(
       conversationId,
+      user._id,
       parseInt(limit, 10),
       before,
     );

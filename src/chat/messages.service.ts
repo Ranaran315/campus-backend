@@ -110,38 +110,57 @@ export class MessageService {
     this.logger.debug(`[MessageService] Populated message: ${JSON.stringify(populatedMessage)}`);
 
     if (!populatedMessage) {
-      console.error(`Failed to re-fetch message ${savedMessage._id} for WebSocket push.`);
+      this.logger.error(`[MessageService] Failed to re-fetch message ${savedMessage._id} for WebSocket push.`);
+      // console.error(`[MessageService] Failed to re-fetch message ${savedMessage._id} for WebSocket push.`); // Alternative if logger not fully set up
+      // Decide whether to return savedMessage or throw an error
     } else if (conversationDetails && conversationDetails.participants) {
+      this.logger.debug(`[MessageService] Pushing message ${populatedMessage._id} via WebSocket. Conversation type: ${conversationDetails.type}, Details: ${JSON.stringify(conversationDetails)}`);
+
       if (conversationDetails.type === 'private') {
-        this.logger.debug(`[MessageService] Sending message to private conversation.`);
         const recipient = conversationDetails.participants.find(
             p => !(new Types.ObjectId(p._id)).equals(senderIdObj)
         );
-        
         if (recipient) {
+          this.logger.debug(`[MessageService] Sending private message to recipient ${recipient._id.toString()}`);
           this.notificationsGateway.sendMessageToUser(recipient._id.toString(), populatedMessage);
+
+          // Send the message back to the sender as well for UI update
+          // Ensure sender is not the same as recipient (usually true for private chats)
+          if (senderIdObj.toString() !== recipient._id.toString()) {
+              this.logger.debug(`[MessageService] Sending private message copy back to sender ${senderIdObj.toString()}`);
+              this.notificationsGateway.sendMessageToUser(senderIdObj.toString(), populatedMessage);
+          }
+        } else {
+          this.logger.warn(`[MessageService] Private chat recipient not found for message ${populatedMessage._id} in conversation ${conversationObjectId}`);
         }
       } else if (conversationDetails.type === 'group') {
-        this.logger.debug(`[MessageService] Sending message to group conversation.`);
         let targetGroupId: string | undefined = undefined;
         if (conversationDetails.group && conversationDetails.group.toString) {
             targetGroupId = conversationDetails.group.toString();
-        } else if (messageDto.group) {
+        } else if (messageDto.group) { 
             targetGroupId = messageDto.group.toString();
         }
+        // Add any other logic to determine targetGroupId if necessary
 
         if (targetGroupId) {
+          this.logger.debug(`[MessageService] Broadcasting group message to group ${targetGroupId}`);
           this.notificationsGateway.broadcastMessageToGroup(targetGroupId, populatedMessage);
+        } else {
+          this.logger.warn(`[MessageService] Group ID not found for group message ${populatedMessage._id} in conversation ${conversationObjectId}. Cannot broadcast.`);
         }
+      } else {
+        this.logger.warn(`[MessageService] Unknown conversation type: ${conversationDetails.type} for message ${populatedMessage._id}. Cannot determine WebSocket push strategy.`);
       }
     }
+    // --- End WebSocket push logic ---
 
-    return savedMessage;
+    return savedMessage; // Or populatedMessage, depending on API contract
   }
 
   // 获取会话的消息历史
   async getConversationMessages(
     conversationId: string | Types.ObjectId,
+    currentUserId: string | Types.ObjectId,
     limit = 20,
     before?: Date | string,
   ) {
@@ -155,12 +174,28 @@ export class MessageService {
       query.createdAt = { $lt: beforeDate };
     }
 
-    return this.messageModel
+    const currentUserIdObj = new Types.ObjectId(currentUserId);
+
+    const messages = await this.messageModel
       .find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
-      .populate('sender', 'username nickname avatar')
+      .populate('sender', 'username nickname avatar _id') // 确保 _id 在 sender 中
+      .lean() // 使用 lean() 获取普通 JS 对象，方便添加属性
       .exec();
+
+    // 为每条消息添加 isSent 字段
+    return messages.map((message) => {
+      // 注意：populate 后的 sender 是一个对象
+      const senderId = message.sender && (message.sender as any)._id 
+        ? new Types.ObjectId((message.sender as any)._id) 
+        : null;
+      
+      return {
+        ...message,
+        isSent: senderId ? senderId.equals(currentUserIdObj) : false,
+      };
+    });
   }
 
   // 标记消息已读
