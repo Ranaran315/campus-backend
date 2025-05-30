@@ -75,16 +75,34 @@ export class MessageService {
       savedMessage._id as Types.ObjectId,
     );
 
-    // 获取会话详情以增加所有其他参与者的未读计数
+    // 获取会话详情以进行后续操作
     const conversationDetails = await this.conversationService.getConversationById(conversationObjectId);
-    const otherParticipants = conversationDetails.participants.filter(
-      (p) => !p.equals(senderIdObj),
+    
+    // 确保会话对所有参与者都可见
+    const allParticipantIds: Types.ObjectId[] = conversationDetails.participants.map(p => p._id as Types.ObjectId);
+    // 理论上发送者 senderIdObj 应该已经在 conversationDetails.participants 中了，
+    // 但为了绝对保险，可以检查并添加（如果会话参与者逻辑复杂或可能不包含发送者）
+    // if (!allParticipantIds.some(id => id.equals(senderIdObj))) {
+    //   allParticipantIds.push(senderIdObj);
+    // }
+    // 实际上，新创建的会话或者通过 getOrCreate 获取的会话，其 participants 列表是权威的。
+    // 对于私聊，getOrCreatePrivateConversation 保证双方都在 participants 中。
+    // 对于群聊，participants 由群成员逻辑维护。发送者如果是群成员，应该在里面。
+
+    await Promise.all(
+      allParticipantIds.map((participantId) =>
+        this.conversationService.ensureConversationIsVisible(participantId, conversationObjectId),
+      ),
     );
 
-    // 更新所有其他参与者的未读计数
+    // 更新所有 *其他* 除去发送者外的参与者的未读计数
+    const otherParticipantsForUnread = conversationDetails.participants.filter(
+      (p) => !(p._id as Types.ObjectId).equals(senderIdObj),
+    );
+
     await Promise.all(
-      otherParticipants.map((userId) =>
-        this.conversationService.incrementUnreadCount(conversationObjectId, userId),
+      otherParticipantsForUnread.map((participant) => // participant 是完整的对象
+        this.conversationService.incrementUnreadCount(conversationObjectId, participant._id as Types.ObjectId), // 使用 participant._id
       ),
     );
 

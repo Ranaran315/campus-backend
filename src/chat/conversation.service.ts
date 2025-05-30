@@ -152,6 +152,11 @@ export class ConversationService {
       .exec();
 
     if (conversation) {
+      // 会话已存在，确保它对两个用户都可见
+      await Promise.all([
+        this.ensureConversationIsVisible(id1, conversation._id as Types.ObjectId),
+        this.ensureConversationIsVisible(id2, conversation._id as Types.ObjectId),
+      ]);
       return conversation;
     }
 
@@ -241,6 +246,21 @@ export class ConversationService {
       { conversation: new Types.ObjectId(conversationId), user: new Types.ObjectId(userId) }, // 使用 user 和 conversation
       { unreadCount: 0 },
       { upsert: true },
+    );
+  }
+
+  // 新增：确保用户的会话设置为可见
+  async ensureConversationIsVisible(
+    userId: string | Types.ObjectId,
+    conversationId: string | Types.ObjectId,
+  ) {
+    const userIdObj = new Types.ObjectId(userId);
+    const conversationIdObj = new Types.ObjectId(conversationId);
+
+    await this.settingModel.findOneAndUpdate(
+      { user: userIdObj, conversation: conversationIdObj },
+      { isVisible: true },
+      { upsert: true, new: true }, // 如果记录不存在则创建，并确保 isVisible 是 true
     );
   }
 
