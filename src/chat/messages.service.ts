@@ -2,21 +2,24 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message, MessageDocument } from './schemas/message.schema';
 import { ConversationService } from './conversation.service';
 import { CreateMessageDto } from './dto/create-message.dto';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { transformObjectId } from 'src/utils/transform';
-import { ChatGateway } from './chat.gateway';
 
 @Injectable()
 export class MessageService {
   constructor(
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
     private conversationService: ConversationService,
-    private chatGateway: ChatGateway,
+    @Inject(forwardRef(() => NotificationsGateway))
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   // 创建新消息
@@ -87,9 +90,9 @@ export class MessageService {
 
     // 将消息通过 WebSocket 推送给相关客户端
     if (savedMessage.receiver) { // 私聊
-      this.chatGateway.sendMessageToUser(savedMessage.receiver.toString(), savedMessage);
+      this.notificationsGateway.sendMessageToUser(savedMessage.receiver.toString(), savedMessage);
     } else if (savedMessage.group) { // 群聊
-      this.chatGateway.broadcastMessageToGroup(savedMessage.group.toString(), savedMessage);
+      this.notificationsGateway.broadcastMessageToGroup(savedMessage.group.toString(), savedMessage);
     }
 
     return savedMessage;

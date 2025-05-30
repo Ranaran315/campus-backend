@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Message, MessageSchema } from './schemas/message.schema';
 import {
@@ -15,7 +15,7 @@ import { ConversationService } from './conversation.service';
 import { GroupService } from './group.service';
 import { ChatController } from './chat.controller';
 import { UsersModule } from '../users/users.module';
-import { ChatGateway } from './chat.gateway';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -28,9 +28,10 @@ import { ChatGateway } from './chat.gateway';
       },
       { name: ChatGroup.name, schema: ChatGroupSchema },
     ]),
-    UsersModule, // 引入用户模块以访问用户服务
+    forwardRef(() => UsersModule),
+    forwardRef(() => NotificationsModule),
   ],
-  providers: [MessageService, ConversationService, GroupService, ChatGateway],
+  providers: [MessageService, ConversationService, GroupService],
   controllers: [ChatController],
   exports: [MessageService, ConversationService, GroupService],
 })
