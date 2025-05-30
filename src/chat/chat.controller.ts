@@ -38,7 +38,7 @@ export class ChatController {
   ) {}
   
   // === 会话相关接口 ===
-  
+  // 获取用户的所有会话（包括私聊和群聊）
   @Get('conversations')
   async getUserConversations(@Request() req) {
     const user = req.user as AuthenticatedUser;
