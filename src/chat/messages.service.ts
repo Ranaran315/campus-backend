@@ -4,6 +4,7 @@ import {
   BadRequestException,
   forwardRef,
   Inject,
+  Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -22,6 +23,8 @@ export class MessageService {
     private notificationsGateway: NotificationsGateway,
   ) {}
 
+  private readonly logger = new Logger(MessageService.name);
+
   // 创建新消息
   async createMessage(
     senderId: string | Types.ObjectId,
@@ -34,14 +37,12 @@ export class MessageService {
     if (messageDto.conversationId) {
       conversationObjectId = new Types.ObjectId(messageDto.conversationId);
     } else if (messageDto.receiver) {
-      // 私聊
       const conversation = await this.conversationService.getOrCreatePrivateConversation(
         senderId,
         messageDto.receiver,
       );
       conversationObjectId = conversation._id as Types.ObjectId;
     } else if (messageDto.group) {
-      // 群聊
       const conversation = await this.conversationService.getOrCreateGroupConversation(
         messageDto.group,
       );
@@ -53,7 +54,7 @@ export class MessageService {
     // 创建消息记录
     const newMessage = new this.messageModel({
       sender: senderIdObj,
-      conversation: conversationObjectId, // 使用 conversationObjectId
+      conversation: conversationObjectId,
       receiver: messageDto.receiver
         ? new Types.ObjectId(messageDto.receiver)
         : undefined,
@@ -63,7 +64,7 @@ export class MessageService {
       type: messageDto.type,
       content: messageDto.content,
       attachments: messageDto.attachments,
-      readBy: [senderIdObj], // 发送者默认已读
+      readBy: [senderIdObj],
       metadata: messageDto.metadata,
     });
 
@@ -76,41 +77,63 @@ export class MessageService {
     );
 
     // 获取会话详情以进行后续操作
-    const conversationDetails = await this.conversationService.getConversationById(conversationObjectId);
+    const conversationDetails = await this.conversationService.getConversationById(conversationObjectId.toString());
     
     // 确保会话对所有参与者都可见
-    const allParticipantIds: Types.ObjectId[] = conversationDetails.participants.map(p => p._id as Types.ObjectId);
-    // 理论上发送者 senderIdObj 应该已经在 conversationDetails.participants 中了，
-    // 但为了绝对保险，可以检查并添加（如果会话参与者逻辑复杂或可能不包含发送者）
-    // if (!allParticipantIds.some(id => id.equals(senderIdObj))) {
-    //   allParticipantIds.push(senderIdObj);
-    // }
-    // 实际上，新创建的会话或者通过 getOrCreate 获取的会话，其 participants 列表是权威的。
-    // 对于私聊，getOrCreatePrivateConversation 保证双方都在 participants 中。
-    // 对于群聊，participants 由群成员逻辑维护。发送者如果是群成员，应该在里面。
+    if (conversationDetails && conversationDetails.participants) {
+      const allParticipantIds: Types.ObjectId[] = conversationDetails.participants.map(p => new Types.ObjectId(p._id));
+      await Promise.all(
+        allParticipantIds.map((participantId) =>
+          this.conversationService.ensureConversationIsVisible(participantId, conversationObjectId),
+        ),
+      );
 
-    await Promise.all(
-      allParticipantIds.map((participantId) =>
-        this.conversationService.ensureConversationIsVisible(participantId, conversationObjectId),
-      ),
-    );
+      // 更新所有 *其他* 除去发送者外的参与者的未读计数
+      const otherParticipantsForUnread = conversationDetails.participants.filter(
+        (p) => !(new Types.ObjectId(p._id)).equals(senderIdObj),
+      );
 
-    // 更新所有 *其他* 除去发送者外的参与者的未读计数
-    const otherParticipantsForUnread = conversationDetails.participants.filter(
-      (p) => !(p._id as Types.ObjectId).equals(senderIdObj),
-    );
+      await Promise.all(
+        otherParticipantsForUnread.map((participant) =>
+          this.conversationService.incrementUnreadCount(conversationObjectId, new Types.ObjectId(participant._id)),
+        ),
+      );
+    } else {
+      console.error(`Conversation details or participants not found for ${conversationObjectId}, skipping visibility/unread updates.`);
+    }
 
-    await Promise.all(
-      otherParticipantsForUnread.map((participant) => // participant 是完整的对象
-        this.conversationService.incrementUnreadCount(conversationObjectId, participant._id as Types.ObjectId), // 使用 participant._id
-      ),
-    );
+    // 重新获取并填充消息，以便发送更丰富的数据
+    const populatedMessage = await this.messageModel.findById(savedMessage._id)
+        .populate('sender', 'username realname nickname avatar')
+        .exec();
+    
+    this.logger.debug(`[MessageService] Populated message: ${JSON.stringify(populatedMessage)}`);
 
-    // 将消息通过 WebSocket 推送给相关客户端
-    if (savedMessage.receiver) { // 私聊
-      this.notificationsGateway.sendMessageToUser(savedMessage.receiver.toString(), savedMessage);
-    } else if (savedMessage.group) { // 群聊
-      this.notificationsGateway.broadcastMessageToGroup(savedMessage.group.toString(), savedMessage);
+    if (!populatedMessage) {
+      console.error(`Failed to re-fetch message ${savedMessage._id} for WebSocket push.`);
+    } else if (conversationDetails && conversationDetails.participants) {
+      if (conversationDetails.type === 'private') {
+        this.logger.debug(`[MessageService] Sending message to private conversation.`);
+        const recipient = conversationDetails.participants.find(
+            p => !(new Types.ObjectId(p._id)).equals(senderIdObj)
+        );
+        
+        if (recipient) {
+          this.notificationsGateway.sendMessageToUser(recipient._id.toString(), populatedMessage);
+        }
+      } else if (conversationDetails.type === 'group') {
+        this.logger.debug(`[MessageService] Sending message to group conversation.`);
+        let targetGroupId: string | undefined = undefined;
+        if (conversationDetails.group && conversationDetails.group.toString) {
+            targetGroupId = conversationDetails.group.toString();
+        } else if (messageDto.group) {
+            targetGroupId = messageDto.group.toString();
+        }
+
+        if (targetGroupId) {
+          this.notificationsGateway.broadcastMessageToGroup(targetGroupId, populatedMessage);
+        }
+      }
     }
 
     return savedMessage;
