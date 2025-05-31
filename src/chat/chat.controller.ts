@@ -164,9 +164,9 @@ export class ChatController {
   // === 群组相关接口 ===
   
   @Post('groups')
-  async createGroup(@Request() req, @Body() groupDto: CreateGroupDto) {
-    const user = req.user as AuthenticatedUser;
-    return this.groupService.createGroup(user._id, groupDto);
+  async createGroup(@Request() req, @Body() createGroupDto: CreateGroupDto) {
+    const userId = req.user._id;
+    return this.groupService.createGroup(userId, createGroupDto);
   }
   
   @Get('groups/:id')
@@ -359,6 +359,69 @@ export class ChatController {
       originalname: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
+    };
+  }
+
+  // 创建群聊会话
+  @Post('conversations/group')
+  async createGroupConversation(@Body() body: { groupId: string }) {
+    return this.conversationService.getOrCreateGroupConversation(body.groupId);
+  }
+
+  /**
+   * @description 上传群头像
+   * @route POST /chat/groups/:id/avatar
+   */
+  @Post('groups/:id/avatar')
+  @UseInterceptors(
+    UserFileInterceptor('file', 'group-avatars', {
+      limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit for group avatars
+      fileFilter: (_req, file, cb) => {
+        // 只允许图片类型
+        const allowedMimes = [
+          'image/jpeg',
+          'image/png',
+          'image/webp'
+        ];
+        
+        if (allowedMimes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new Error('只支持 JPG、PNG、WEBP 格式的图片'), false);
+        }
+      },
+    }),
+  )
+  async uploadGroupAvatar(
+    @Request() req,
+    @Param('id') groupId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('未检测到上传的图片');
+    }
+
+    const user = req.user as AuthenticatedUser;
+    const group = await this.groupService.getGroupById(groupId);
+    
+    // 只有群主或管理员可以更新群头像
+    const userIdObj = transformObjectId(user._id);
+    const isAuthorized = group.owner.equals(userIdObj) || 
+                        group.admins.some(id => id.equals(userIdObj));
+    
+    if (!isAuthorized) {
+      throw new ForbiddenException('只有群主或管理员可以更新群头像');
+    }
+
+    const url = `/uploads/group-avatars/${groupId}/${file.filename}`;
+
+    // 更新群组头像
+    await this.groupService.updateGroupAvatar(groupId, url);
+
+    return {
+      success: true,
+      url,
+      filename: file.filename,
     };
   }
 }

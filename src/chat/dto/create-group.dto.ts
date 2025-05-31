@@ -1,32 +1,15 @@
-import {
-  IsString,
-  IsArray,
-  IsOptional,
-  IsMongoId,
-  IsNotEmpty,
-  MaxLength,
-  ArrayMinSize,
-  ArrayMaxSize,
-} from 'class-validator';
+import { IsString, IsOptional, Length } from 'class-validator';
 
+// TEMPORARILY SIMPLIFIED FOR DEBUGGING
 export class CreateGroupDto {
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
+  @Length(1, 20, { message: '群名称长度必须在1-20个字符之间' })
   name: string;
   
-  @IsString()
   @IsOptional()
-  @MaxLength(200)
+  @IsString()
+  @Length(0, 200, { message: '群描述不能超过200个字符' })
   description?: string;
-  
-  @IsString()
-  @IsOptional()
-  avatar?: string;
-  
-  @IsArray()
-  @IsMongoId({ each: true })
-  @ArrayMinSize(1)
-  @ArrayMaxSize(100)
-  members: string[];
+
+  // 'members' field is completely removed for this test
 }

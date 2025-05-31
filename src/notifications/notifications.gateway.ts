@@ -272,7 +272,7 @@ export class NotificationsGateway
       this.logger.log(`聊天：已向用户 ${userInfo.username} (ID: ${userId}, SocketID: ${userInfo.socketId}) 发送私聊消息`);
       return true;
     } else {
-      this.logger.log(`聊天：用户ID ${userId} 不在线。无法发送私聊消息。`);
+      this.logger.log(`聊天：用户ID ${userId} 不在线。`);
       return false;
     }
   }
