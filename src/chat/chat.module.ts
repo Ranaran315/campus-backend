@@ -16,6 +16,7 @@ import { GroupService } from './group.service';
 import { ChatController } from './chat.controller';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { FriendsModule } from '../friends/friends.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ]),
     forwardRef(() => UsersModule),
     forwardRef(() => NotificationsModule),
+    forwardRef(() => FriendsModule),
   ],
   providers: [MessageService, ConversationService, GroupService],
   controllers: [ChatController],

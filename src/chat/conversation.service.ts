@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types, Document as MongooseDocument } from 'mongoose';
@@ -14,6 +16,8 @@ import {
   UserConversationSettingDocument,
 } from './schemas/user-conversation-setting.schema';
 import { Message, MessageDocument } from './schemas/message.schema';
+import { FriendsService } from '../friends/friends.service';
+import { ChatGroup } from './schemas/chat-group.schema';
 // 假设 GroupDocument 和 Group 已经定义在某处，例如 group.schema.ts
 // import { Group, GroupDocument } from '../group/schemas/group.schema'; 
 
@@ -25,6 +29,14 @@ interface TempGroupDocument extends MongooseDocument {
   // ... other group fields
 }
 
+interface ConversationParticipant {
+  _id: Types.ObjectId;
+  username: string;
+  nickname?: string;
+  avatar?: string;
+  email?: string;
+}
+
 @Injectable()
 export class ConversationService {
   constructor(
@@ -33,6 +45,9 @@ export class ConversationService {
     @InjectModel(UserConversationSetting.name)
     private settingModel: Model<UserConversationSettingDocument>,
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
+    @InjectModel(ChatGroup.name) private chatGroupModel: Model<ChatGroup>,
+    @Inject(forwardRef(() => FriendsService))
+    private friendsService: FriendsService,
     // 如果GroupModel可用，则注入它以验证群组信息或进行更复杂的填充
     // @InjectModel(Group.name) private groupModel: Model<GroupDocument>,
   ) {}
@@ -50,9 +65,9 @@ export class ConversationService {
       .populate('lastMessage')
       .populate({ path: 'participants', select: 'username nickname avatar _id email' })
       .populate({
-          path: 'group', // 尝试填充 conversation schema 中的 group 字段
-          select: 'name avatar', // 假设 Group schema 有 name 和 avatar 字段
-       })
+        path: 'group',
+        select: 'name avatar',
+      })
       .sort({ lastActivityAt: -1 })
       .lean()
       .exec();
@@ -61,11 +76,20 @@ export class ConversationService {
     const conversationIds = conversations.map((c) => c._id);
     const settings = await this.settingModel
       .find({
-        user: userIdObj, // 确保使用 user 字段
-        conversation: { $in: conversationIds }, // 确保使用 conversation 字段
+        user: userIdObj,
+        conversation: { $in: conversationIds },
       })
       .lean()
       .exec();
+
+    // 获取用户的所有好友关系
+    const friends = await this.friendsService.getFriends(userIdObj);
+    const friendsMap = new Map(
+      friends.map(friend => [
+        friend.friend._id.toString(),
+        friend
+      ])
+    );
 
     // 合并会话信息与个人设置
     const settingsMap = new Map(
@@ -75,61 +99,52 @@ export class ConversationService {
     const result = conversations
       .map((conv) => {
         const setting = settingsMap.get(conv._id.toString());
-        
-        let displayProfile: any = null; // 初始化 displayProfile
+        let displayProfile: any = null;
 
         if (conv.type === 'private') {
           const otherParticipant = conv.participants.find(
             (p) => !(p._id as Types.ObjectId).equals(userIdObj)
           );
-          if (otherParticipant) {
-            displayProfile = otherParticipant;
+          
+          if (otherParticipant && 'username' in otherParticipant) {
+            const participant = otherParticipant as ConversationParticipant;
+            // 查找是否是好友关系
+            const friendInfo = friendsMap.get(participant._id.toString());
+            displayProfile = {
+              ...participant,
+              // 如果是好友且有备注名，使用备注名
+              nickname: friendInfo?.remark || participant.nickname || participant.username,
+              isFriend: !!friendInfo
+            };
           }
         } else if (conv.type === 'group') {
-          // conv.group 现在应该是填充后的群组对象（如果填充成功且字段存在）
-          // 需要确保 conv.group 的类型是 TempGroupDocument 或实际的 GroupDocument
           if (conv.group && typeof conv.group === 'object' && 'name' in conv.group) {
-             displayProfile = conv.group; // as TempGroupDocument; // 假设 conv.group 已经是填充的对象
+            displayProfile = conv.group;
           } else {
-            // 如果群组信息未填充或不完整，可以设置一个默认的群组显示
-            displayProfile = { name: '群聊', avatar: '' }; // 或者从其他地方获取群名
+            displayProfile = { name: '群聊', avatar: '' };
           }
         }
 
         return {
           ...conv,
           isPinned: setting?.isPinned || false,
-          isVisible: setting?.isVisible !== false, // 默认可见
+          isVisible: setting?.isVisible !== false,
           unreadCount: setting?.unreadCount || 0,
           isMuted: setting?.isMuted || false,
           customName: setting?.nickname,
-          displayProfile: displayProfile, // 添加 displayProfile 字段
+          displayProfile: displayProfile,
         };
       })
-      // 过滤掉用户设置为不可见的会话
       .filter((conv) => conv.isVisible)
-      // 置顶的会话优先显示
+      // 置顶的会话优先显示，同一状态下按最后活动时间排序
       .sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        // 对于 lastActivityAt 的排序，确保它存在并且是 Date 对象
-        const timeA = a.lastActivityAt instanceof Date ? a.lastActivityAt.getTime() : 0;
-        const timeB = b.lastActivityAt instanceof Date ? b.lastActivityAt.getTime() : 0;
-        if (timeA !== timeB) {
-            return timeB - timeA; // 按最后活动时间降序
+        if (a.isPinned !== b.isPinned) {
+          return a.isPinned ? -1 : 1;
         }
-        return 0;
-      });
-
-    // 进一步确保置顶的在最前面，并且在置顶/非置顶内部按活动时间排序
-    result.sort((a,b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
         const timeA = a.lastActivityAt instanceof Date ? a.lastActivityAt.getTime() : Date.parse(a.lastActivityAt as any || 0);
         const timeB = b.lastActivityAt instanceof Date ? b.lastActivityAt.getTime() : Date.parse(b.lastActivityAt as any || 0);
-        return timeB - timeA; //降序
-    });
-
+        return timeB - timeA;
+      });
 
     return result;
   }
