@@ -13,7 +13,9 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
-  Logger
+  Logger,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MessageService } from './messages.service';
@@ -25,6 +27,8 @@ import { UpdateGroupDto } from './dto/update-group.dto';
 import { AuthenticatedUser } from '../auth/types';
 import { Types } from 'mongoose';
 import { transformObjectId } from '../utils/transform';
+import { UserFileInterceptor } from '../utils/local-upload';
+import { Express } from 'express';
 
 @Controller('chat')
 @UseGuards(JwtAuthGuard)
@@ -260,5 +264,101 @@ export class ChatController {
       { $set: updateData },
       { new: true }
     );
+  }
+
+  /**
+   * @description 上传聊天图片
+   * @route POST /chat/upload/image
+   */
+  @Post('upload/image')
+  @UseInterceptors(
+    UserFileInterceptor('file', 'chat-images', {
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for images
+      fileFilter: (_req, file, cb) => {
+        // 只允许图片类型
+        const allowedMimes = [
+          'image/jpeg',
+          'image/png',
+          'image/gif',
+          'image/webp'
+        ];
+        
+        if (allowedMimes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new Error('只支持 JPG、PNG、GIF、WEBP 格式的图片'), false);
+        }
+      },
+    }),
+  )
+  async uploadImage(
+    @Request() req,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('未检测到上传的图片');
+    }
+
+    const userId = req.user._id.toString();
+    const url = `/uploads/chat-images/${userId}/${file.filename}`;
+
+    return {
+      success: true,
+      url,
+      filename: file.filename,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+    };
+  }
+
+  /**
+   * @description 上传聊天文件
+   * @route POST /chat/upload/file
+   */
+  @Post('upload/file')
+  @UseInterceptors(
+    UserFileInterceptor('file', 'chat-files', {
+      limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit for files
+      fileFilter: (_req, file, cb) => {
+        // 允许的文件类型
+        const allowedMimes = [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'text/plain',
+          'application/zip',
+          'application/x-zip-compressed'
+        ];
+        
+        if (allowedMimes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new Error('不支持的文件类型'), false);
+        }
+      },
+    }),
+  )
+  async uploadFile(
+    @Request() req,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('未检测到上传的文件');
+    }
+
+    const userId = req.user._id.toString();
+    const url = `/uploads/chat-files/${userId}/${file.filename}`;
+
+    return {
+      success: true,
+      url,
+      filename: file.filename,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+    };
   }
 }
