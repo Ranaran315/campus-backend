@@ -12,6 +12,7 @@ import {
   Delete,
   UseInterceptors,
   UploadedFile,
+  Put,
 } from '@nestjs/common';
 import { InformService, PopulatedInformReceipt } from './inform.service'; // Import PopulatedInformReceipt
 import { CreateInformDto } from './dto/create-inform.dto';
@@ -67,6 +68,25 @@ export class InformController {
     // InformService 的 create 方法现在默认就是创建草稿
     return this.informService.create(createInformDto, sender);
   }
+
+  /**
+   * @description 更新已存在的通知草稿
+   * @route PUT /informs/:id
+   * @param id Inform 文档的 ID
+   */
+  @Put(':id')
+  // @UseGuards(PermissionsGuard)
+  // @Permissions('inform:update_draft') // Example permission, adjust as needed
+  @HttpCode(HttpStatus.OK)
+  async updateDraft(
+    @Param('id') informId: string,
+    @Body() updateInformDto: CreateInformDto, // Using CreateInformDto for now, consider a specific UpdateInformDto if needed
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const currentUser = req.user as AuthenticatedUser;
+    return this.informService.updateDraft(informId, updateInformDto, currentUser);
+  }
+
   /**
    * @description 发布一个已存在的草稿通知
    * @route POST /informs/:id/publish

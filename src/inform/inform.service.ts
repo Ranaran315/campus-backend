@@ -105,6 +105,83 @@ export class InformService {
     );
     return savedInform;
   }
+
+  // --- 更新草稿通知 ---
+  async updateDraft(
+    informId: string,
+    updateInformDto: CreateInformDto, // Using CreateInformDto for now
+    currentUser: AuthenticatedUser,
+  ): Promise<InformDocument> {
+    if (!Types.ObjectId.isValid(informId)) {
+      throw new BadRequestException('无效的通知ID格式。');
+    }
+
+    const informToUpdate = await this.informModel.findById(informId);
+
+    if (!informToUpdate) {
+      throw new NotFoundException(`通知 ID '${informId}' 未找到。`);
+    }
+
+    if (
+      !transformObjectId(informToUpdate.sender).equals(
+        transformObjectId(currentUser._id),
+      )
+    ) {
+      throw new ForbiddenException('您没有权限修改此通知草稿。');
+    }
+
+    if (informToUpdate.status !== 'draft') {
+      throw new BadRequestException(
+        `通知 ID '${informId}' 当前状态为 '${informToUpdate.status}'，无法作为草稿更新。请确保它是草稿状态。`,
+      );
+    }
+
+    this.logger.log(
+      `Attempting to update inform DRAFT ID: ${informId} by user: ${currentUser.username}`,
+    );
+
+    // Update fields from DTO
+    informToUpdate.title = updateInformDto.title;
+    informToUpdate.content = updateInformDto.content;
+    informToUpdate.description = updateInformDto.description; // Optional
+    informToUpdate.importance = updateInformDto.importance || 'low'; // Default if not provided
+    informToUpdate.tags = updateInformDto.tags || []; // Default to empty array
+    informToUpdate.allowReplies =
+      updateInformDto.allowReplies !== undefined
+        ? updateInformDto.allowReplies
+        : true; // Default based on your logic
+
+    if (updateInformDto.attachments) {
+      informToUpdate.attachments = updateInformDto.attachments;
+    }
+
+    if (
+      updateInformDto.deadline &&
+      typeof updateInformDto.deadline === 'string'
+    ) {
+      const deadlineDate = new Date(updateInformDto.deadline);
+      if (!isNaN(deadlineDate.getTime())) {
+        informToUpdate.deadline = deadlineDate;
+      } else {
+        this.logger.warn(`Invalid deadline date format received during update for inform ${informId}: ${updateInformDto.deadline}`);
+        // Optionally throw BadRequestException or ignore invalid date
+      }
+    } else if (updateInformDto.deadline === null) {
+      informToUpdate.deadline = undefined; // Allow clearing the deadline
+    }
+
+    // Ensure status remains draft - though it should already be if we passed the check
+    informToUpdate.status = 'draft';
+    // @ts-ignore
+    informToUpdate.updatedAt = new Date(); // Manually update updatedAt if not automatically handled
+
+    const savedInform = await informToUpdate.save();
+    this.logger.log(
+      `Inform draft ID: ${savedInform._id} updated successfully by ${currentUser.username}.`,
+    );
+    return savedInform;
+  }
+
   // --- 发布通知 ---
   async publish(
     informId: string,
