@@ -16,6 +16,7 @@ import {
   UserConversationSettingDocument,
 } from './schemas/user-conversation-setting.schema';
 import { ConversationService } from './conversation.service';
+import { Message, MessageDocument } from './schemas/message.schema';
 
 // TEMPORARILY SIMPLIFIED FOR DEBUGGING
 interface CreateGroupDto {
@@ -33,6 +34,7 @@ export class GroupService {
     @InjectModel(UserConversationSetting.name)
     private settingModel: Model<UserConversationSettingDocument>,
     private conversationService: ConversationService,
+    @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
   ) {}
 
   async createGroup(userId: string | Types.ObjectId, createGroupDto: CreateGroupDto) {
@@ -295,15 +297,28 @@ export class GroupService {
       throw new ForbiddenException('只有群主可以解散群组');
     }
 
-    // 软删除群组
-    group.isDeleted = true;
-    await group.save();
+    // 查找对应的会话
+    const conversation = await this.conversationModel.findOne({ 
+      group: new Types.ObjectId(groupId) 
+    });
 
-    // 软删除对应的会话
-    await this.conversationModel.findOneAndUpdate(
-      { group: new Types.ObjectId(groupId) }, // 使用 group 字段
-      { isDeleted: true },
-    );
+    if (conversation) {
+      // 删除所有相关消息
+      await this.messageModel.deleteMany(
+        { conversation: conversation._id }
+      );
+
+      // 删除所有会话设置
+      await this.settingModel.deleteMany(
+        { conversation: conversation._id }
+      );
+
+      // 删除会话
+      await this.conversationModel.findByIdAndDelete(conversation._id);
+    }
+
+    // 删除群组
+    await this.groupModel.findByIdAndDelete(groupId);
 
     return { success: true };
   }

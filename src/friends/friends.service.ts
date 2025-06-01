@@ -29,6 +29,9 @@ import {
   FriendCategory,
   FriendCategoryDocument,
 } from './schemas/friendsCategory.schema';
+import { Conversation, ConversationDocument } from 'src/chat/schemas/conversation.schema';
+import { Message, MessageDocument } from 'src/chat/schemas/message.schema';
+import { UserConversationSetting, UserConversationSettingDocument } from 'src/chat/schemas/user-conversation-setting.schema';
 
 interface UserInfo {
   _id: Types.ObjectId | string;
@@ -90,6 +93,9 @@ export class FriendsService {
     private notificationsGateway: NotificationsGateway,
     @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService, // 注入UsersService
+    @InjectModel(Conversation.name) private conversationModel: Model<ConversationDocument>,
+    @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
+    @InjectModel(UserConversationSetting.name) private settingModel: Model<UserConversationSettingDocument>,
   ) {}
 
   private readonly logger = new Logger('FriendsService'); // 添加日志记录器
@@ -549,6 +555,7 @@ export class FriendsService {
   ): Promise<any> {
     const userObjectId = transformObjectId(userId);
     const friendObjectId = transformObjectId(friendId);
+
     // 删除双向好友关系
     await this.friendRelationModel.deleteOne({
       user: userObjectId,
@@ -558,6 +565,27 @@ export class FriendsService {
       user: friendObjectId,
       friend: userObjectId,
     });
+
+    // 查找私聊会话
+    const conversation = await this.conversationModel.findOne({
+      type: 'private',
+      participants: { $all: [userObjectId, friendObjectId], $size: 2 },
+    });
+
+    if (conversation) {
+      // 删除所有相关消息
+      await this.messageModel.deleteMany(
+        { conversation: conversation._id }
+      );
+
+      // 删除会话设置
+      await this.settingModel.deleteMany(
+        { conversation: conversation._id }
+      );
+
+      // 删除会话
+      await this.conversationModel.findByIdAndDelete(conversation._id);
+    }
 
     return { success: true };
   }
@@ -729,7 +757,7 @@ export class FriendsService {
     //       );
     //     }
     //   } else {
-    //     // 如果连默认分类都找不到（严重错误），则创建一个临时的“未分类”组
+    //     // 如果连默认分类都找不到（严重错误），则创建一个临时的"未分类"组
     //     this.logger.error(
     //       `User [${userId}] - Default category not found. Orphaned friends with null category will be in "未分类".`,
     //     );
