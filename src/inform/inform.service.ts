@@ -330,7 +330,7 @@ export class InformService {
           !originalSenderDoc.academicClass
         ) {
           throw new BadRequestException(
-            `发布通知 ${informDoc._id} 失败：原始发送者设置不适用于“发送者所在班级”目标类型。`,
+            `发布通知 ${informDoc._id} 失败：原始发送者设置不适用于"发送者所在班级"目标类型。`,
           );
         }
         targetUserIds = await this.usersService.findUserIdsByAcademicClassIds(
@@ -345,7 +345,7 @@ export class InformService {
           originalSenderDoc.staffInfo.managedClasses.length === 0
         ) {
           throw new BadRequestException(
-            `发布通知 ${informDoc._id} 失败：原始发送者设置不适用于“发送者管理的所有班级”目标类型。`,
+            `发布通知 ${informDoc._id} 失败：原始发送者设置不适用于"发送者管理的所有班级"目标类型。`,
           );
         }
         targetUserIds = await this.usersService.findUserIdsByAcademicClassIds(
@@ -596,32 +596,36 @@ export class InformService {
         sortOrder === SortOrderQuery.ASC ? 1 : -1;
     }
 
-    const total = await this.informReceiptModel
-      .countDocuments(findQuery)
-      .exec();
-    const totalPages = Math.ceil(total / limit);
-
     const fetchedReceipts = await this.informReceiptModel
       .find(findQuery)
       .populate({
-        path: 'inform', // 使用新的字段名
-        model: 'Inform', // 直接使用字符串而不是Inform.name
-        strictPopulate: false, // 添加此选项以允许更灵活的填充
+        path: 'inform', 
+        model: 'Inform', 
+        match: { status: { $in: ['published', 'archived'] } }, // 只 populate 状态为 published 或 archived 的通知
         populate: {
           path: 'sender',
           model: 'User',
           select: '_id realname nickname avatar',
-          strictPopulate: false,
+          // strictPopulate for nested populate if needed, but usually not necessary here
         },
       })
+      // Removed strictPopulate from here as it was likely causing the duplicate key error
+      // It's an option for the .populate() method itself, not within the object for a specific path.
+      // If needed for the top-level populate, it would be: .populate({ ..., strictPopulate: false })
+      // However, for path-specific objects, it's not standard.
+      // Mongoose default for strictPopulate is true. Setting to false globally or per-query needs careful consideration.
+      // For this specific case, the match should handle filtering correctly.
       .sort(sortOptions)
       .skip((page - 1) * limit)
       .limit(limit)
       .exec();
 
+    // 过滤掉那些因为 match 条件导致 inform 为 null 的回执
+    const validReceipts = fetchedReceipts.filter(receipt => receipt.inform !== null);
+
     // Cast to PopulatedInformReceipt[]
     let processedReceipts: PopulatedInformReceipt[] =
-      fetchedReceipts as unknown as PopulatedInformReceipt[];
+      validReceipts as unknown as PopulatedInformReceipt[];
 
     // Application-level sorting for fields on the populated Inform document
     if (sortBy === InformSortByQuery.PUBLISH_AT) {
@@ -659,15 +663,33 @@ export class InformService {
       });
     }
 
-    // this.logger.debug('处理后的回执数据:', processedReceipts);
+    // Recalculate total based on the count of receipts that would match *before* populate filtering
+    // This gives a more accurate total for pagination if we still want to count all user receipts
+    // regardless of the populated inform's status for raw counting purposes.
+    // However, if pagination should only reflect what's *displayable*, then validReceipts.length is fine.
+    const totalQuery = { ...findQuery }; // Base query for user's receipts
+    // If we need to count only those receipts whose informs *would be* published or archived:
+    const informsWithValidStatus = await this.informModel.find({ status: { $in: ['published', 'archived'] } }).select('_id').lean();
+    const informIdsWithValidStatus = informsWithValidStatus.map(inf => inf._id);
+    
+    // Add condition to only count receipts linked to informs with valid status
+    // This makes the `total` reflect how many items *could* have been populated successfully.
+    if (informIdsWithValidStatus.length > 0) {
+      totalQuery.inform = { $in: informIdsWithValidStatus };
+    } else {
+      // If no informs have valid status, then no receipts can be validly populated
+      totalQuery.inform = { $in: [] }; // Results in a count of 0
+    }
+
+    const total = await this.informReceiptModel.countDocuments(totalQuery).exec();
 
     return {
-      data: processedReceipts,
-      total,
+      data: processedReceipts, 
+      total, // Use the recalculated total
       page,
       limit,
-      totalPages,
-      hasNextPage: page < totalPages,
+      totalPages: Math.ceil(total / limit), 
+      hasNextPage: page < Math.ceil(total / limit),
       hasPrevPage: page > 1,
     };
   }
@@ -858,8 +880,6 @@ export class InformService {
       throw new BadRequestException(`只能删除草稿状态的通知。`);
     }
 
-    // 修改deleteDraft方法中的权限检查
-    // 确保只有通知的创建者才能删除
     if (
       !transformObjectId(inform.sender).equals(
         transformObjectId(currentUser._id),
@@ -868,8 +888,13 @@ export class InformService {
       throw new ForbiddenException('您没有权限删除此通知草稿。');
     }
 
+    // 删除通知文档
     await this.informModel.findByIdAndDelete(informId);
     this.logger.log(`通知草稿 ${informId} 已被用户 ${currentUser._id} 删除。`);
+
+    // 同时删除与此通知关联的所有回执记录
+    const deleteResult = await this.informReceiptModel.deleteMany({ inform: informId });
+    this.logger.log(`为已删除的通知 ${informId} 清理了 ${deleteResult.deletedCount} 条关联回执。`);
   }
 
   // 撤销已发布的通知
@@ -887,8 +912,6 @@ export class InformService {
       throw new BadRequestException(`只能撤销已发布状态的通知。`);
     }
 
-    // 修改revokePublishedInform方法中的权限检查
-    // 确保只有通知的创建者才能撤销
     if (
       !transformObjectId(inform.sender).equals(
         transformObjectId(currentUser._id),
@@ -897,16 +920,17 @@ export class InformService {
       throw new ForbiddenException('您没有权限撤销此通知。');
     }
 
-    // 更新通知状态为草稿
     inform.status = 'draft';
     inform.lastRevokeAt = new Date();
+    
+    const updatedInform = await inform.save(); // 先保存Inform文档的更新
+    this.logger.log(`通知 ${informId} 状态已更新为草稿，操作用户 ${currentUser._id}。`);
 
-    const updatedInform = await inform.save();
-
-    // 删除所有收件人的回执记录
-    await this.informReceiptModel.deleteMany({ inform: informId });
-
-    this.logger.log(`通知 ${informId} 已被用户 ${currentUser._id} 撤销发布。`);
+    // 在Inform文档成功更新为draft后，再删除所有相关的回执记录
+    // 确保 informId 是正确的类型，如果 schema 中 inform 字段是 ObjectId
+    const objectIdInformId = new Types.ObjectId(informId);
+    const deleteReceiptsResult = await this.informReceiptModel.deleteMany({ inform: objectIdInformId });
+    this.logger.log(`为已撤销的通知 ${informId} 删除了 ${deleteReceiptsResult.deletedCount} 条关联回执。`);
 
     return updatedInform;
   }
