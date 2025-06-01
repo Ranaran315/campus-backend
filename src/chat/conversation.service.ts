@@ -22,11 +22,17 @@ import { ChatGroup } from './schemas/chat-group.schema';
 // import { Group, GroupDocument } from '../group/schemas/group.schema'; 
 
 // 为了编译通过，如果 GroupDocument 未导入，先做一个临时定义
-interface TempGroupDocument extends MongooseDocument {
+interface TempGroupDocument {
   _id: Types.ObjectId;
   name: string;
   avatar?: string;
-  // ... other group fields
+  description?: string;
+  owner: Types.ObjectId;
+  members: Types.ObjectId[];
+  admins: Types.ObjectId[];
+  maxMembers: number;
+  isPublic: boolean;
+  isDeleted: boolean;
 }
 
 interface ConversationParticipant {
@@ -66,7 +72,8 @@ export class ConversationService {
       .populate({ path: 'participants', select: 'username nickname avatar _id email' })
       .populate({
         path: 'group',
-        select: 'name avatar',
+        select: 'name avatar description owner members',
+        model: this.chatGroupModel
       })
       .sort({ lastActivityAt: -1 })
       .lean()
@@ -119,7 +126,14 @@ export class ConversationService {
           }
         } else if (conv.type === 'group') {
           if (conv.group && typeof conv.group === 'object' && 'name' in conv.group) {
-            displayProfile = conv.group;
+            const group = conv.group as unknown as TempGroupDocument;
+            displayProfile = {
+              _id: group._id,
+              name: group.name,
+              avatar: group.avatar,
+              description: group.description,
+              memberCount: Array.isArray(group.members) ? group.members.length : 1
+            };
           } else {
             displayProfile = { name: '群聊', avatar: '' };
           }
@@ -209,7 +223,7 @@ export class ConversationService {
     const existingConversation = await this.conversationModel
       .findOne({
         type: 'group',
-        group: groupIdObj, // 确保使用 group 字段
+        group: groupIdObj,
         isDeleted: { $ne: true },
       })
       .exec();
@@ -218,15 +232,30 @@ export class ConversationService {
       return existingConversation;
     }
 
-    // 创建新的群聊会话
+    // 获取群组信息以获取群主ID
+    const group = await this.chatGroupModel.findById(groupIdObj);
+    if (!group) {
+      throw new NotFoundException('群组不存在');
+    }
+
+    // 创建新的群聊会话，将群主添加为参与者
     const newConversation = new this.conversationModel({
       type: 'group',
-      group: groupIdObj, // 确保使用 group 字段
-      participants: [], // 会在GroupService中更新成员
+      group: groupIdObj,
+      participants: [group.owner], // 将群主添加为初始参与者
       lastActivityAt: new Date(),
     });
 
-    return await newConversation.save();
+    const savedConversation = await newConversation.save();
+
+    // 为群主创建会话设置
+    await this.settingModel.create({
+      user: group.owner,
+      conversation: savedConversation._id,
+      isVisible: true,
+    });
+
+    return savedConversation;
   }
 
   // 更新会话最后活动时间和最后一条消息

@@ -69,7 +69,7 @@ export class GroupService {
   }
 
   // 获取群组详情
-  async getGroupById(groupId: string | Types.ObjectId) {
+  async getGroupById(groupId: string | Types.ObjectId): Promise<ChatGroupDocument | null> {
     const group = await this.groupModel
       .findById(groupId)
       .populate('owner', 'username nickname avatar')
@@ -99,10 +99,29 @@ export class GroupService {
   async updateGroupAvatar(groupId: string | Types.ObjectId, avatarUrl: string) {
     const group = await this.groupModel.findById(groupId);
     if (!group) {
-      throw new NotFoundException('群组不存在');
+      throw new NotFoundException('群组不存在 (updateGroupAvatar)');
     }
 
     group.avatar = avatarUrl;
+    return await group.save();
+  }
+
+  // 更新群组基本信息 (名称, 描述等)
+  async updateGroup(groupId: string | Types.ObjectId, updateData: Partial<Pick<ChatGroup, 'name' | 'description'>>) {
+    const group = await this.groupModel.findById(groupId);
+    if (!group) {
+      throw new NotFoundException('群组不存在 (updateGroup)');
+    }
+
+    // Update allowed fields
+    if (updateData.name !== undefined) {
+      group.name = updateData.name.trim();
+    }
+    if (updateData.description !== undefined) {
+      group.description = updateData.description.trim();
+    }
+    // Add other updatable fields here if necessary, e.g., group.isPublic
+
     return await group.save();
   }
 

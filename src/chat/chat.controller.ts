@@ -16,6 +16,7 @@ import {
   Logger,
   UseInterceptors,
   UploadedFile,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MessageService } from './messages.service';
@@ -28,7 +29,9 @@ import { AuthenticatedUser } from '../auth/types';
 import { Types } from 'mongoose';
 import { transformObjectId } from '../utils/transform';
 import { UserFileInterceptor } from '../utils/local-upload';
+import { GroupAvatarFileInterceptor } from '../utils/GroupAvatarFileInterceptor';
 import { Express } from 'express';
+import { ChatGroupDocument } from './schemas/chat-group.schema';
 
 @Controller('chat')
 @UseGuards(JwtAuthGuard)
@@ -122,18 +125,26 @@ export class ChatController {
   async sendMessage(@Request() req, @Body() messageDto: CreateMessageDto) {
     const user = req.user as AuthenticatedUser;
     
-    // 如果提供了会话ID，验证用户是否为会话参与者
     if (messageDto.conversationId) {
       const conversation = await this.conversationService.getConversationById(messageDto.conversationId);
-      if (!conversation.participants.some(p => p.equals(transformObjectId(user._id)))) {
+      if (!conversation || !conversation.participants) {
+        throw new Error('会话数据无效');
+      }
+      if (!conversation.participants.some(p => (p as Types.ObjectId).equals(transformObjectId(user._id)))) {
         throw new ForbiddenException('您不是该会话的参与者');
       }
     }
     
-    // 如果提供了群组ID，验证用户是否为群成员
     if (messageDto.group) {
       const group = await this.groupService.getGroupById(messageDto.group);
-      if (!group.members.some(m => m.equals(transformObjectId(user._id)))) {
+      if (!group) {
+        throw new NotFoundException('目标群组不存在（sendMessage）');
+      }
+      if (!group.members || !Array.isArray(group.members)) {
+        this.logger.error(`Group ${ (group as any)._id} in sendMessage has invalid members property.`);
+        throw new Error('群组成员数据无效');
+      }
+      if (!group.members.some(m => (m as Types.ObjectId).equals(transformObjectId(user._id)))) {
         throw new ForbiddenException('您不是该群组的成员');
       }
     }
@@ -173,9 +184,15 @@ export class ChatController {
   async getGroupDetails(@Request() req, @Param('id') groupId: string) {
     const user = req.user as AuthenticatedUser;
     const group = await this.groupService.getGroupById(groupId);
-    
-    // 验证用户是否为群成员
-    if (!group.members.some(m => m.equals(transformObjectId(user._id)))) {
+
+    if (!group) {
+      throw new NotFoundException('群组不存在 (getGroupDetails)');
+    }
+    if (!group.members || !Array.isArray(group.members)) {
+        this.logger.error(`Group ${ (group as any)._id} in getGroupDetails has invalid members property.`);
+        throw new Error('群组成员数据无效');
+    }
+    if (!group.members.some(m => (m as Types.ObjectId).equals(transformObjectId(user._id)))) {
       throw new ForbiddenException('您不是该群组的成员');
     }
     
@@ -248,22 +265,25 @@ export class ChatController {
   ) {
     const user = req.user as AuthenticatedUser;
     const group = await this.groupService.getGroupById(groupId);
-    
-    // 只有群主或管理员可以更新群资料
+
+    if (!group) { 
+      throw new NotFoundException('群组不存在 (updateGroup)');
+    }
+    const groupDoc = group as ChatGroupDocument;
+
     const userIdObj = transformObjectId(user._id);
-    const isAuthorized = group.owner.equals(userIdObj) || 
-                        group.admins.some(id => id.equals(userIdObj));
+    if (!groupDoc.owner || !groupDoc.admins || !Array.isArray(groupDoc.admins)) {
+        this.logger.error(`UpdateGroup: Group ${ (groupDoc as any)._id} loaded without owner or admins properly.`);
+        throw new Error('群组关键信息未加载，无法更新');
+    }
+    const isAuthorized = (groupDoc.owner as Types.ObjectId).equals(userIdObj) || 
+                        groupDoc.admins.some(id => (id as Types.ObjectId).equals(userIdObj));
     
     if (!isAuthorized) {
       throw new ForbiddenException('只有群主或管理员可以更新群资料');
     }
     
-    // 简单实现（可以移到 GroupService 中）
-    return this.groupService['groupModel'].findByIdAndUpdate(
-      groupId,
-      { $set: updateData },
-      { new: true }
-    );
+    return this.groupService.updateGroup(groupId, updateData);
   }
 
   /**
@@ -374,7 +394,7 @@ export class ChatController {
    */
   @Post('groups/:id/avatar')
   @UseInterceptors(
-    UserFileInterceptor('file', 'group-avatars', {
+    GroupAvatarFileInterceptor('file', {
       limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit for group avatars
       fileFilter: (_req, file, cb) => {
         // 只允许图片类型
@@ -402,21 +422,35 @@ export class ChatController {
     }
 
     const user = req.user as AuthenticatedUser;
-    const group = await this.groupService.getGroupById(groupId);
+    const groupQueryResult = await this.groupService.getGroupById(groupId);
+
+    if (!groupQueryResult) { 
+      throw new NotFoundException('群组不存在 (controller: group not found after query)');
+    }
     
-    // 只有群主或管理员可以更新群头像
+    const group = groupQueryResult as ChatGroupDocument;
+
     const userIdObj = transformObjectId(user._id);
-    const isAuthorized = group.owner.equals(userIdObj) || 
-                        group.admins.some(id => id.equals(userIdObj));
+    if (!group.owner || !group.admins) { 
+        this.logger.error(`Group ${(group as any)._id} loaded without owner or admins populated.`);
+        throw new Error('群组所有者或管理员信息未正确加载'); 
+    }
+
+    const isAuthorized = (group.owner as Types.ObjectId).equals(userIdObj) || 
+                        group.admins.some(adminId => (adminId as Types.ObjectId).equals(userIdObj));
     
     if (!isAuthorized) {
       throw new ForbiddenException('只有群主或管理员可以更新群头像');
     }
 
-    const url = `/uploads/group-avatars/${groupId}/${file.filename}`;
+    const objectIdForPath = (group as any)._id;
+    if (!objectIdForPath || typeof objectIdForPath.toString !== 'function') {
+        this.logger.error(`Group object does not have a valid _id for path generation: ${JSON.stringify(group)}`);
+        throw new Error('无法生成群头像路径：群ID无效');
+    }
+    const url = `/uploads/group-avatars/${objectIdForPath.toString()}/${file.filename}`;
 
-    // 更新群组头像
-    await this.groupService.updateGroupAvatar(groupId, url);
+    await this.groupService.updateGroupAvatar(objectIdForPath, url);
 
     return {
       success: true,

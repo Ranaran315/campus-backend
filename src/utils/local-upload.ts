@@ -60,6 +60,26 @@ export function getUserMulterStorage(
   });
 }
 
+// New storage function for group avatars
+export function getGroupAvatarStorage(groupId: string) {
+  const safeGroupId = groupId && /^[a-f0-9]{24}$/i.test(groupId) ? groupId : 'invalid-group-id';
+  const basePath = join(process.cwd(), 'uploads', 'group-avatars', safeGroupId);
+
+  if (!existsSync(basePath)) {
+    mkdirSync(basePath, { recursive: true });
+  }
+
+  return diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, basePath);
+    },
+    filename: (_req, file, cb) => {
+      const uniqueName = uuidv4() + extname(file.originalname);
+      cb(null, uniqueName);
+    },
+  });
+}
+
 // 保留原来的函数以保持兼容性
 export function getGeneralMulterStorage(type: string) {
   return getUserMulterStorage(type);
