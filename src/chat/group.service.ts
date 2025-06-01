@@ -71,12 +71,19 @@ export class GroupService {
   }
 
   // 获取群组详情
-  async getGroupById(groupId: string | Types.ObjectId): Promise<ChatGroupDocument | null> {
+  async getGroupById(groupId: string | Types.ObjectId, includeMembers = true): Promise<ChatGroupDocument | null> {
+    const basePopulate = [
+      { path: 'owner', select: 'username nickname avatar' },
+      { path: 'admins', select: 'username nickname avatar' },
+    ];
+
+    if (includeMembers) {
+      basePopulate.push({ path: 'members', select: 'username nickname avatar' });
+    }
+
     const group = await this.groupModel
       .findById(groupId)
-      .populate('owner', 'username nickname avatar')
-      .populate('members', 'username nickname avatar')
-      .populate('admins', 'username nickname avatar')
+      .populate(basePopulate)
       .exec();
 
     if (!group) {
@@ -84,6 +91,58 @@ export class GroupService {
     }
 
     return group;
+  }
+
+  // 新增：获取群成员列表
+  async getGroupMembers(
+    groupId: string | Types.ObjectId,
+    userId: string | Types.ObjectId,
+    search?: string,
+  ) {
+    const group = await this.groupModel
+      .findById(groupId)
+      .populate([
+        { path: 'owner', select: 'username nickname avatar' },
+        { path: 'admins', select: 'username nickname avatar' },
+        { path: 'members', select: 'username nickname avatar' },
+      ])
+      .exec();
+
+    if (!group) {
+      throw new NotFoundException('群组不存在');
+    }
+
+    // 验证请求用户是否为群成员
+    const userIdObj = new Types.ObjectId(userId);
+    if (!group.members.some(m => (m as any)._id.equals(userIdObj))) {
+      throw new ForbiddenException('您不是该群组的成员');
+    }
+
+    let members = group.members;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      members = members.filter((member: any) => {
+        const username = member.username.toLowerCase();
+        const nickname = member.nickname?.toLowerCase() || '';
+        return username.includes(searchLower) || nickname.includes(searchLower);
+      });
+    }
+
+    // 为每个成员添加角色信息
+    const membersWithRoles = members.map((member: any) => {
+      const isOwner = group.owner._id.equals(member._id);
+      const isAdmin = group.admins.some((admin: any) => admin._id.equals(member._id));
+      
+      return {
+        ...member.toObject(),
+        role: isOwner ? 'owner' : (isAdmin ? 'admin' : 'member')
+      };
+    });
+
+    return {
+      total: group.members.length,
+      members: membersWithRoles,
+    };
   }
 
   // 获取用户加入的所有群组
@@ -170,15 +229,29 @@ export class GroupService {
     });
 
     if (conversation) {
-      conversation.participants.push(memberIdObj);
-      await conversation.save();
+      // 添加到会话参与者列表
+      if (!conversation.participants.some(id => id.equals(memberIdObj))) {
+        conversation.participants.push(memberIdObj);
+        await conversation.save();
+      }
 
-      // 为新成员创建会话设置
-      await this.settingModel.create({
-        user: memberIdObj,
-        conversation: conversation._id,
-        isVisible: true,
-      });
+      // 更新或创建会话设置
+      await this.settingModel.findOneAndUpdate(
+        {
+          user: memberIdObj,
+          conversation: conversation._id,
+        },
+        {
+          $set: {
+            isVisible: true,
+            unreadCount: 0,
+          }
+        },
+        {
+          upsert: true,
+          new: true,
+        }
+      );
     }
 
     return group;
@@ -225,19 +298,21 @@ export class GroupService {
 
     // 更新会话参与者
     const conversation = await this.conversationModel.findOne({
-      group: new Types.ObjectId(groupId), // 使用 group 字段
+      group: new Types.ObjectId(groupId),
     });
+    
     if (conversation) {
+      // 从会话参与者列表中移除
       conversation.participants = conversation.participants.filter(
         (id) => !id.equals(memberIdObj),
       );
       await conversation.save();
 
-      // 隐藏该成员的会话
-      await this.settingModel.findOneAndUpdate(
-        { user: memberIdObj, conversation: conversation._id }, // 使用 user 和 conversation 字段
-        { isVisible: false },
-      );
+      // 删除该成员的会话设置
+      await this.settingModel.deleteOne({
+        user: memberIdObj,
+        conversation: conversation._id,
+      });
     }
 
     return group;

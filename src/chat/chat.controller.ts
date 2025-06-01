@@ -183,7 +183,7 @@ export class ChatController {
   @Get('groups/:id')
   async getGroupDetails(@Request() req, @Param('id') groupId: string) {
     const user = req.user as AuthenticatedUser;
-    const group = await this.groupService.getGroupById(groupId);
+    const group = await this.groupService.getGroupById(groupId, false);
 
     if (!group) {
       throw new NotFoundException('群组不存在 (getGroupDetails)');
@@ -457,5 +457,16 @@ export class ChatController {
       url,
       filename: file.filename,
     };
+  }
+
+  // 新增：获取群成员列表的接口
+  @Get('groups/:id/members')
+  async getGroupMembers(
+    @Request() req,
+    @Param('id') groupId: string,
+    @Query('search') search?: string,
+  ) {
+    const user = req.user as AuthenticatedUser;
+    return this.groupService.getGroupMembers(groupId, user._id, search);
   }
 }
