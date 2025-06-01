@@ -313,12 +313,13 @@ export class UsersService {
     if (populateRoles) {
       query
         .populate({ path: 'roles', model: 'Role' })
-        .populate({ path: 'college', model: 'College' })
-        .populate({ path: 'major', model: 'Major' })
-        .populate({ path: 'academicClass', model: 'AcademicClass' })
-        .populate({ path: 'staffInfo.department', model: 'College' })
-        .populate({ path: 'staffInfo.managedClasses', model: 'AcademicClass' });
     }
+    query
+      .populate({ path: 'college', model: 'College' })
+      .populate({ path: 'major', model: 'Major' })
+      .populate({ path: 'academicClass', model: 'AcademicClass' })
+      .populate({ path: 'staffInfo.department', model: 'College' })
+      .populate({ path: 'staffInfo.managedClasses', model: 'AcademicClass' });
     const user = await query.select('-password').exec(); // 排除密码字段
     if (!user) {
       // 如果找不到用户，抛出 404 Not Found 异常

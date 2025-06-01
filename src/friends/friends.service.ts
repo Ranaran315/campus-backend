@@ -953,6 +953,13 @@ export class FriendsService {
         // 明确 populate 的类型
         path: 'friend',
         select: '-password', // 选择需要返回的用户公开字段
+        populate: [
+          { path: 'college', model: 'College' },
+          { path: 'major', model: 'Major' },
+          { path: 'academicClass', model: 'AcademicClass' },
+          { path: 'staffInfo.department', model: 'College' },
+          { path: 'staffInfo.managedClasses', model: 'AcademicClass' }
+        ]
       })
       .populate<{
         category:
