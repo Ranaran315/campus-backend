@@ -68,6 +68,13 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  // --- 获取用户统计信息 ---
+  // GET /users/stats/user-counts
+  @Get('stats/user-counts')
+  async getUserStats() {
+    return this.usersService.getUserStats();
+  }
+
   // --- 搜索用户 ---
   @Get('search')
   async searchUsers(@Query('q') query: string) {

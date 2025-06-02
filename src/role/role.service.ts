@@ -4,6 +4,8 @@ import {
   ConflictException,
   BadRequestException,
   Logger, // 引入 BadRequestException
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -17,6 +19,7 @@ import {
   UserRoleResponseDto,
 } from './dto/role-response.dto';
 import { AuthenticatedUser } from 'src/auth/types';
+import { UsersService } from '../users/users.service';
 
 function isValidPermission(permission: string): boolean {
   return VALID_PERMISSIONS.has(permission);
@@ -34,7 +37,11 @@ function validatePermissions(permissions: string[]): void {
 
 @Injectable()
 export class RoleService {
-  constructor(@InjectModel(Role.name) private roleModel: Model<RoleDocument>) {}
+  constructor(
+    @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
+  ) {}
 
   private readonly logger = new Logger(RoleService.name);
 
@@ -326,5 +333,22 @@ export class RoleService {
     );
 
     return uniqueScopes;
+  }
+
+  // --- 获取角色分布统计 ---
+  async getRoleDistribution(): Promise<{ name: string; count: number }[]> {
+    const roles = await this.roleModel.find().exec();
+    const users = await this.usersService.findAll();
+    
+    const distribution = roles.map(role => ({
+      name: role.displayName,
+      count: users.filter(user => 
+        user.roles.some(userRole => 
+          userRole.toString() === (role as any)._id.toString()
+        )
+      ).length
+    }));
+    
+    return distribution;
   }
 }

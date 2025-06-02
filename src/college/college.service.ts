@@ -1,14 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { College, CollegeDocument } from './schemas/college.schema';
 import { CreateCollegeDto } from './dto/create-college.dto';
 import { UpdateCollegeDto } from './dto/update-college.dto';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class CollegeService {
   constructor(
     @InjectModel(College.name) private collegeModel: Model<CollegeDocument>,
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
   ) {}
 
   async create(createCollegeDto: CreateCollegeDto): Promise<College> {
@@ -49,5 +52,26 @@ export class CollegeService {
       throw new NotFoundException(`College with ID "${id}" not found`);
     }
     return { deleted: true };
+  }
+
+  // --- 获取学院人员分布统计 ---
+  async getCollegeDistribution(): Promise<{ name: string; studentCount: number; staffCount: number }[]> {
+    const colleges = await this.collegeModel.find().exec();
+    const users = await this.usersService.findAll();
+    
+    const distribution = colleges.map(college => {
+      const collegeUsers = users.filter(user => 
+        // @ts-ignore
+        user.college && user.college.toString() === college._id.toString()
+      );
+      
+      return {
+        name: college.name,
+        studentCount: collegeUsers.filter(user => user.userType === 'student').length,
+        staffCount: collegeUsers.filter(user => user.userType === 'staff').length
+      };
+    });
+    
+    return distribution;
   }
 }

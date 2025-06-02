@@ -37,6 +37,12 @@ export class CollegeController {
     return this.collegeService.findAll();
   }
 
+  // 获取学院人员分布统计
+  @Get('stats/distribution')
+  async getCollegeDistribution() {
+    return this.collegeService.getCollegeDistribution();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.collegeService.findOne(id);

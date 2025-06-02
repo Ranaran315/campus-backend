@@ -45,6 +45,12 @@ export class RoleController {
     return this.roleService.findAll();
   }
 
+  // 获取角色分布统计
+  @Get('stats/distribution')
+  async getRoleDistribution() {
+    return this.roleService.getRoleDistribution();
+  }
+
   // 获取当前用户角色列表
   @Get('mine/sendable')
   @UseGuards(JwtAuthGuard)

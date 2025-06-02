@@ -41,6 +41,14 @@ export class UsersService {
 
   private readonly logger = new Logger(UsersService.name); // 添加日志记录器
 
+  // --- 获取用户统计信息 ---
+  async getUserStats(): Promise<{ totalUsers: number; studentCount: number; staffCount: number }> {
+    const totalUsers = await this.userModel.countDocuments().exec();
+    const studentCount = await this.userModel.countDocuments({ userType: 'student' }).exec();
+    const staffCount = await this.userModel.countDocuments({ userType: 'staff' }).exec();
+    return { totalUsers, studentCount, staffCount };
+  }
+
   // --- 创建用户 (CREATE) ---
   async create(createUserDto: CreateUserDto): Promise<Omit<User, 'password'>> {
     const {
